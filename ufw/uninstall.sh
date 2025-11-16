@@ -70,11 +70,11 @@ if [ "$UFW_AVAILABLE" = true ] && [ -f "${INSTALL_DIR}/ufw_rules.conf" ]; then
         # Parse rule: RULE_NAME|PROTO|PORT|HOSTNAME|COMMENT
         IFS='|' read -ra PARTS <<< "$line"
 
-        local rule_name="${PARTS[0]:-}"
-        local proto="${PARTS[1]:-}"
-        local port="${PARTS[2]:-}"
-        local hostname="${PARTS[3]:-}"
-        local comment="${PARTS[4]:-}"
+        rule_name="${PARTS[0]:-}"
+        proto="${PARTS[1]:-}"
+        port="${PARTS[2]:-}"
+        hostname="${PARTS[3]:-}"
+        comment="${PARTS[4]:-}"
 
         if [[ -z "$hostname" ]]; then
             continue
