@@ -166,7 +166,38 @@ list_security_group_rules() {
     scw_api_call "GET" "/security_groups/${sg_id}" "" "$zone"
 }
 
-# Find rules by identifier (returns comma-separated rule IDs)
+# Find rules in security group by IP address (returns comma-separated rule IDs)
+find_rules_in_sg_by_ip() {
+    local sg_id="$1"
+    local ip="$2"
+    local zone="${3:-fr-par-1}"
+
+    # Return empty if no IP provided
+    if [[ -z "$ip" ]]; then
+        echo ""
+        return 0
+    fi
+
+    # Get all rules from security group
+    local response=$(scw_api_call "GET" "/security_groups/${sg_id}/rules" "" "$zone")
+
+    # Use Python to parse JSON and extract rule IDs for this IP (supports both "ip" and "ip/32")
+    local rule_ids=$(echo "$response" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    rules = data.get('rules', [])
+    target_ip = '${ip}'
+    matching_ids = [r['id'] for r in rules if r.get('ip_range') in [target_ip, target_ip + '/32']]
+    print(','.join(matching_ids))
+except Exception as e:
+    print('', file=sys.stderr)
+" 2>/dev/null)
+
+    echo "$rule_ids"
+}
+
+# Find rules by identifier (deprecated - use find_rules_in_sg_by_ip instead)
 find_rules_by_identifier() {
     local sg_id="$1"
     local identifier="$2"
@@ -222,34 +253,84 @@ create_security_group_rules() {
     fi
 }
 
-# Delete security group rules (comma-separated IDs)
+# Delete security group rules with IP verification (comma-separated IDs)
+# IMPORTANT: Only deletes rules if their IP matches expected_ip (safety check)
 delete_security_group_rules() {
     local sg_id="$1"
     local rule_ids="$2"
-    local zone="${3:-fr-par-1}"
+    local expected_ip="$3"  # IP that rules must match to be deleted
+    local zone="${4:-fr-par-1}"
+
+    # Safety check: require expected_ip
+    if [[ -z "$expected_ip" ]]; then
+        log "ERROR: delete_security_group_rules requires expected_ip parameter"
+        return 1
+    fi
+
+    # Get all current rules to verify IPs before deletion
+    local all_rules=$(scw_api_call "GET" "/security_groups/${sg_id}/rules" "" "$zone")
 
     IFS=',' read -ra IDS <<< "$rule_ids"
     for rule_id in "${IDS[@]}"; do
-        scw_api_call "DELETE" "/security_groups/${sg_id}/rules/${rule_id}" "" "$zone"
-        log "Deleted rule ID: ${rule_id}"
+        # Extract IP for this rule using Python JSON parser
+        local rule_ip=$(echo "$all_rules" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    rules = data.get('rules', [])
+    rule_id = '${rule_id}'
+    matching_rule = next((r for r in rules if r.get('id') == rule_id), None)
+    if matching_rule:
+        print(matching_rule.get('ip_range', ''))
+except Exception as e:
+    print('', file=sys.stderr)
+" 2>/dev/null)
+
+        # Verify IP matches before deleting (safety check to avoid deleting other rules)
+        # Support both "ip" and "ip/32" formats
+        if [[ "$rule_ip" == "$expected_ip" || "$rule_ip" == "${expected_ip}/32" ]]; then
+            scw_api_call "DELETE" "/security_groups/${sg_id}/rules/${rule_id}" "" "$zone"
+            log "Deleted rule ID: ${rule_id} (IP: ${rule_ip})"
+        else
+            log "WARNING: Skipping deletion of rule ${rule_id} - IP mismatch (expected: ${expected_ip}, found: ${rule_ip:-none})"
+        fi
     done
 }
 
-# Update security group rules (delete old, create new)
+# Update security group rules (delete old, create/reuse new)
 update_security_group_rules() {
     local sg_id="$1"
-    local old_rule_ids="$2"
+    local old_ip="$2"
     local new_ip="$3"
     local identifier="$4"
     local zone="${5:-fr-par-1}"
 
-    # Delete old rules
-    if [[ -n "$old_rule_ids" ]]; then
-        delete_security_group_rules "$sg_id" "$old_rule_ids" "$zone"
+    # Find existing rules for old IP in security group (not cache)
+    local old_rule_ids=""
+    if [[ -n "$old_ip" ]]; then
+        old_rule_ids=$(find_rules_in_sg_by_ip "$sg_id" "$old_ip" "$zone")
     fi
 
-    # Create new rules
-    create_security_group_rules "$sg_id" "$new_ip" "$identifier" "$zone"
+    # Delete old rules with IP verification (safety check)
+    if [[ -n "$old_rule_ids" ]]; then
+        log "Found old rules for ${identifier} (${old_ip}): ${old_rule_ids}"
+        delete_security_group_rules "$sg_id" "$old_rule_ids" "$old_ip" "$zone"
+    fi
+
+    # Check if rules already exist for new IP (avoid duplicates)
+    local existing_new_rules=$(find_rules_in_sg_by_ip "$sg_id" "$new_ip" "$zone")
+
+    if [[ -n "$existing_new_rules" ]]; then
+        # Rules already exist for this IP - reuse them instead of creating duplicates
+        log "Rules already exist for ${identifier} (${new_ip}), reusing: ${existing_new_rules}"
+
+        # Cache the existing rule IDs
+        local cache_key="${sg_id}_${identifier}_rule_ids"
+        echo "$existing_new_rules" > "${CACHE_DIR}/${cache_key}.cache"
+    else
+        # Create new rules (none exist for this IP)
+        create_security_group_rules "$sg_id" "$new_ip" "$identifier" "$zone"
+    fi
 }
 
 # Main update function
@@ -293,11 +374,8 @@ update_scaleway_rules() {
         if [[ "$current_ip" != "$cached_ip" ]]; then
             log "IP change detected for ${identifier}: ${cached_ip:-none} -> ${current_ip}"
 
-            # Find existing rules
-            local existing_rule_ids=$(find_rules_by_identifier "$sg_id" "$identifier" "$zone")
-
-            # Update rules
-            update_security_group_rules "$sg_id" "$existing_rule_ids" "$current_ip" "$identifier" "$zone"
+            # Update rules (pass old IP for safe deletion, new IP for creation/reuse)
+            update_security_group_rules "$sg_id" "$cached_ip" "$current_ip" "$identifier" "$zone"
 
             # Cache new IP
             cache_ip "$cache_key" "$current_ip"
