@@ -16,7 +16,30 @@ bash-ddns-whitelister/
 
 ## 🚀 Quick Start
 
-### 1. Detect Firewall Types
+### Interactive Menu
+
+Use the interactive menu for easy access to all features:
+
+```bash
+./menu.sh
+```
+
+![Interactive Menu](https://files.italic.fr/WindowsTerminal_QrEuDNvNxT.png)
+
+The menu provides organized access to:
+- 🟢 Deploy scripts to servers
+- 🔴 Uninstall scripts from servers
+- 🔵 View configuration files
+- 🟡 Utilities & tools
+- 🟣 Firewall management
+- 🔵 Verification & testing
+- 🟢 Documentation & help
+
+### Manual Deployment
+
+Or use the command-line tools directly:
+
+#### 1. Detect Firewall Types
 
 Use the utility script to automatically detect what firewall each server uses:
 
@@ -27,7 +50,7 @@ cp .env.dist .env
 ./detect-firewall.sh
 ```
 
-### 2. Deploy SSH Keys
+#### 2. Deploy SSH Keys
 
 Deploy your SSH keys to all servers for passwordless authentication:
 
@@ -36,7 +59,7 @@ cd utils
 ./deploy-ssh-keys.sh
 ```
 
-### 3. Deploy DDNS Scripts
+#### 3. Deploy DDNS Scripts
 
 Based on firewall type detected, deploy the appropriate script:
 
@@ -58,7 +81,7 @@ cd ufw
 ./deploy.sh server.example.com 22 root
 ```
 
-### 4. Test Connectivity
+#### 4. Test Connectivity
 
 Test that your NAS can connect to all servers (run this FROM the NAS):
 
