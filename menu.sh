@@ -59,10 +59,11 @@ show_main_menu() {
     echo
     print_option "1" "Deploy scripts to servers" "$GREEN"
     print_option "2" "Uninstall scripts from servers" "$RED"
-    print_option "3" "Utilities & Tools" "$CYAN"
-    print_option "4" "Firewall Management" "$YELLOW"
-    print_option "5" "Verification & Testing" "$BLUE"
-    print_option "6" "Documentation & Help" "$MAGENTA"
+    print_option "3" "View Configuration" "$CYAN"
+    print_option "4" "Utilities & Tools" "$YELLOW"
+    print_option "5" "Firewall Management" "$MAGENTA"
+    print_option "6" "Verification & Testing" "$BLUE"
+    print_option "7" "Documentation & Help" "$GREEN"
     echo
     print_separator
     print_option "0" "Exit" "$RED"
@@ -73,10 +74,11 @@ show_main_menu() {
     case $choice in
         1) deployment_menu ;;
         2) uninstall_menu ;;
-        3) utilities_menu ;;
-        4) firewall_menu ;;
-        5) verification_menu ;;
-        6) documentation_menu ;;
+        3) configuration_menu ;;
+        4) utilities_menu ;;
+        5) firewall_menu ;;
+        6) verification_menu ;;
+        7) documentation_menu ;;
         0) exit 0 ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -150,6 +152,39 @@ uninstall_menu() {
             echo -e "${RED}Invalid option!${NC}"
             wait_for_key
             uninstall_menu
+            ;;
+    esac
+}
+
+# Configuration menu
+configuration_menu() {
+    print_header
+    echo -e "${BOLD}${CYAN}View Configuration${NC}"
+    print_separator
+    echo
+    print_option "1" "View utils/.env (servers & SSH keys)" "$CYAN"
+    print_option "2" "View iptables/.env (DNS settings)" "$CYAN"
+    print_option "3" "View plesk/.env (DNS settings)" "$CYAN"
+    print_option "4" "View ufw/.env (DNS settings)" "$CYAN"
+    print_option "5" "View all .env files summary" "$GREEN"
+    echo
+    print_separator
+    print_option "0" "Back to main menu" "$YELLOW"
+    echo
+    echo -n "Select an option: "
+    read choice
+
+    case $choice in
+        1) view_utils_env ;;
+        2) view_iptables_env ;;
+        3) view_plesk_env ;;
+        4) view_ufw_env ;;
+        5) view_all_env_summary ;;
+        0) show_main_menu ;;
+        *)
+            echo -e "${RED}Invalid option!${NC}"
+            wait_for_key
+            configuration_menu
             ;;
     esac
 }
@@ -284,6 +319,256 @@ documentation_menu() {
             documentation_menu
             ;;
     esac
+}
+
+# ============================================================================
+# Configuration viewing functions
+# ============================================================================
+
+# View utils/.env
+view_utils_env() {
+    print_header
+    echo -e "${BOLD}${CYAN}Utils Configuration (utils/.env)${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/utils/.env" ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        echo
+        echo "This file contains:"
+        echo "  • Server list (SERVERS array)"
+        echo "  • NAS SSH configuration (NAS1_HOST, NAS1_USER, NAS1_PUBKEY)"
+        echo "  • Local SSH public key (LOCAL_SSH_PUBKEY)"
+        echo
+        echo "Create it from utils/.env.dist template"
+        wait_for_key
+        configuration_menu
+        return
+    fi
+
+    source "${REPO_DIR}/utils/.env"
+
+    echo -e "${GREEN}NAS Configuration:${NC}"
+    echo "  NAS1_HOST:    ${NAS1_HOST:-not set}"
+    echo "  NAS1_USER:    ${NAS1_USER:-not set}"
+    echo "  NAS1_PUBKEY:  ${NAS1_PUBKEY:0:50}..." # Show first 50 chars
+    echo
+    echo -e "${GREEN}Local SSH Key:${NC}"
+    echo "  LOCAL_SSH_PUBKEY: ${LOCAL_SSH_PUBKEY:0:50}..."
+    echo
+    echo -e "${GREEN}Server List (${#SERVERS[@]} servers):${NC}"
+    echo
+    printf "  %-4s %-35s %-6s %-8s %-10s\n" "No" "Hostname" "Port" "User" "Firewall"
+    echo "  ────────────────────────────────────────────────────────────────────"
+
+    local idx=1
+    for server_config in "${SERVERS[@]}"; do
+        IFS=':' read -ra PARTS <<< "$server_config"
+        local hostname="${PARTS[0]}"
+        local port="${PARTS[1]:-22}"
+        local user="${PARTS[2]:-root}"
+        local firewall_type="${PARTS[3]:-iptables}"
+        local skip_flag="${PARTS[4]:-}"
+
+        if [[ "$skip_flag" == "SKIP" ]]; then
+            hostname="$hostname (SKIP)"
+        fi
+
+        printf "  %-4s %-35s %-6s %-8s %-10s\n" "$idx" "$hostname" "$port" "$user" "$firewall_type"
+        idx=$((idx + 1))
+    done
+
+    wait_for_key
+    configuration_menu
+}
+
+# View iptables/.env
+view_iptables_env() {
+    print_header
+    echo -e "${BOLD}${CYAN}iptables Configuration (iptables/.env)${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/iptables/.env" ]; then
+        echo -e "${RED}ERROR: iptables/.env not found${NC}"
+        echo
+        echo "This file should contain:"
+        echo "  • DNS_NAMESERVER (for hostname resolution)"
+        echo "  • LOG_ROTATION_HOURS (log retention)"
+        echo "  • Optional hostname references"
+        echo
+        echo "Create it from iptables/.env.dist template"
+        wait_for_key
+        configuration_menu
+        return
+    fi
+
+    # Read the file and display key settings
+    echo -e "${GREEN}DNS Configuration:${NC}"
+    grep "^DNS_NAMESERVER=" "${REPO_DIR}/iptables/.env" 2>/dev/null || echo "  DNS_NAMESERVER: not set"
+    echo
+    echo -e "${GREEN}Log Settings:${NC}"
+    grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/iptables/.env" 2>/dev/null || echo "  LOG_ROTATION_HOURS: not set"
+    echo
+    echo -e "${GREEN}Hostname References (optional):${NC}"
+    grep "HOSTNAME=" "${REPO_DIR}/iptables/.env" 2>/dev/null | head -5 || echo "  (none defined)"
+    echo
+    echo -e "${CYAN}Full file content:${NC}"
+    echo "────────────────────────────────────────────────────────────────────"
+    cat "${REPO_DIR}/iptables/.env"
+    echo "────────────────────────────────────────────────────────────────────"
+
+    wait_for_key
+    configuration_menu
+}
+
+# View plesk/.env
+view_plesk_env() {
+    print_header
+    echo -e "${BOLD}${CYAN}Plesk Configuration (plesk/.env)${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/plesk/.env" ]; then
+        echo -e "${RED}ERROR: plesk/.env not found${NC}"
+        echo
+        echo "This file should contain:"
+        echo "  • DNS_NAMESERVER (for hostname resolution)"
+        echo "  • LOG_ROTATION_HOURS (log retention)"
+        echo "  • Optional hostname references"
+        echo
+        echo "Create it from plesk/.env.dist template"
+        wait_for_key
+        configuration_menu
+        return
+    fi
+
+    echo -e "${GREEN}DNS Configuration:${NC}"
+    grep "^DNS_NAMESERVER=" "${REPO_DIR}/plesk/.env" 2>/dev/null || echo "  DNS_NAMESERVER: not set"
+    echo
+    echo -e "${GREEN}Log Settings:${NC}"
+    grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/plesk/.env" 2>/dev/null || echo "  LOG_ROTATION_HOURS: not set"
+    echo
+    echo -e "${GREEN}Hostname References (optional):${NC}"
+    grep "HOSTNAME=" "${REPO_DIR}/plesk/.env" 2>/dev/null | head -5 || echo "  (none defined)"
+    echo
+    echo -e "${CYAN}Full file content:${NC}"
+    echo "────────────────────────────────────────────────────────────────────"
+    cat "${REPO_DIR}/plesk/.env"
+    echo "────────────────────────────────────────────────────────────────────"
+
+    wait_for_key
+    configuration_menu
+}
+
+# View ufw/.env
+view_ufw_env() {
+    print_header
+    echo -e "${BOLD}${CYAN}UFW Configuration (ufw/.env)${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/ufw/.env" ]; then
+        echo -e "${RED}ERROR: ufw/.env not found${NC}"
+        echo
+        echo "This file should contain:"
+        echo "  • DNS_NAMESERVER (for hostname resolution)"
+        echo "  • LOG_ROTATION_HOURS (log retention)"
+        echo "  • Optional hostname references"
+        echo
+        echo "Create it from ufw/.env.dist template"
+        wait_for_key
+        configuration_menu
+        return
+    fi
+
+    echo -e "${GREEN}DNS Configuration:${NC}"
+    grep "^DNS_NAMESERVER=" "${REPO_DIR}/ufw/.env" 2>/dev/null || echo "  DNS_NAMESERVER: not set"
+    echo
+    echo -e "${GREEN}Log Settings:${NC}"
+    grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/ufw/.env" 2>/dev/null || echo "  LOG_ROTATION_HOURS: not set"
+    echo
+    echo -e "${GREEN}Hostname References (optional):${NC}"
+    grep "HOSTNAME=" "${REPO_DIR}/ufw/.env" 2>/dev/null | head -5 || echo "  (none defined)"
+    echo
+    echo -e "${CYAN}Full file content:${NC}"
+    echo "────────────────────────────────────────────────────────────────────"
+    cat "${REPO_DIR}/ufw/.env"
+    echo "────────────────────────────────────────────────────────────────────"
+
+    wait_for_key
+    configuration_menu
+}
+
+# View all .env summary
+view_all_env_summary() {
+    print_header
+    echo -e "${BOLD}${CYAN}All Configuration Summary${NC}"
+    print_separator
+    echo
+
+    # Utils .env
+    echo -e "${BOLD}${GREEN}1. Utils Configuration${NC} (utils/.env)"
+    echo "   Purpose: Server list, SSH keys, NAS configuration"
+    if [ -f "${REPO_DIR}/utils/.env" ]; then
+        source "${REPO_DIR}/utils/.env"
+        echo -e "   ${GREEN}✓ Found${NC}"
+        echo "     - Servers: ${#SERVERS[@]}"
+        echo "     - NAS Host: ${NAS1_HOST:-not set}"
+        echo "     - NAS User: ${NAS1_USER:-not set}"
+    else
+        echo -e "   ${RED}✗ Not found${NC}"
+    fi
+    echo
+
+    # iptables .env
+    echo -e "${BOLD}${GREEN}2. iptables Configuration${NC} (iptables/.env)"
+    echo "   Purpose: DNS nameserver, log rotation for iptables servers"
+    if [ -f "${REPO_DIR}/iptables/.env" ]; then
+        echo -e "   ${GREEN}✓ Found${NC}"
+        local dns=$(grep "^DNS_NAMESERVER=" "${REPO_DIR}/iptables/.env" 2>/dev/null | cut -d'=' -f2)
+        local log=$(grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/iptables/.env" 2>/dev/null | cut -d'=' -f2)
+        echo "     - DNS Nameserver: ${dns:-not set}"
+        echo "     - Log Rotation: ${log:-not set} hours"
+    else
+        echo -e "   ${RED}✗ Not found${NC}"
+    fi
+    echo
+
+    # plesk .env
+    echo -e "${BOLD}${GREEN}3. Plesk Configuration${NC} (plesk/.env)"
+    echo "   Purpose: DNS nameserver, log rotation for Plesk servers"
+    if [ -f "${REPO_DIR}/plesk/.env" ]; then
+        echo -e "   ${GREEN}✓ Found${NC}"
+        local dns=$(grep "^DNS_NAMESERVER=" "${REPO_DIR}/plesk/.env" 2>/dev/null | cut -d'=' -f2)
+        local log=$(grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/plesk/.env" 2>/dev/null | cut -d'=' -f2)
+        echo "     - DNS Nameserver: ${dns:-not set}"
+        echo "     - Log Rotation: ${log:-not set} hours"
+    else
+        echo -e "   ${RED}✗ Not found${NC}"
+    fi
+    echo
+
+    # ufw .env
+    echo -e "${BOLD}${GREEN}4. UFW Configuration${NC} (ufw/.env)"
+    echo "   Purpose: DNS nameserver, log rotation for UFW servers"
+    if [ -f "${REPO_DIR}/ufw/.env" ]; then
+        echo -e "   ${GREEN}✓ Found${NC}"
+        local dns=$(grep "^DNS_NAMESERVER=" "${REPO_DIR}/ufw/.env" 2>/dev/null | cut -d'=' -f2)
+        local log=$(grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/ufw/.env" 2>/dev/null | cut -d'=' -f2)
+        echo "     - DNS Nameserver: ${dns:-not set}"
+        echo "     - Log Rotation: ${log:-not set} hours"
+    else
+        echo -e "   ${RED}✗ Not found${NC}"
+    fi
+    echo
+
+    print_separator
+    echo -e "${YELLOW}Note: All .env files are gitignored (contain sensitive data)${NC}"
+    echo -e "${YELLOW}Create them from corresponding .env.dist templates${NC}"
+
+    wait_for_key
+    configuration_menu
 }
 
 # ============================================================================
