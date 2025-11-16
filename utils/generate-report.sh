@@ -220,22 +220,32 @@ generate_comments() {
     local fw_policy="$2"
     local fw_type="$3"
     local ssh_ok="$4"
-    
+    local hostname="$5"
+
     local comments=""
-    
+
+    # Check for network-level firewall protection
+    if [[ "$hostname" == "1p.italic.fr" ]] || [[ "$hostname" == "discourse.italic.fr" ]]; then
+        comments="⚠️ Protected by Scaleway security group - API script needed for whitelist"
+    elif [[ "$hostname" == "13.36.123.138" ]] || [[ "$hostname" == "43.198.96.78" ]]; then
+        comments="⚠️ Protected by AWS security group - API script needed for whitelist"
+    elif [[ "$hostname" == "debug.not.live" ]]; then
+        comments="⚠️ Protected by OVH edge network firewall - API script needed for whitelist"
+    fi
+
     # Check for security issues
     if [[ "$fw_policy" == "ACCEPT" ]]; then
-        comments="⚠️ SECURITY: Default ACCEPT policy - server accepts all connections!"
+        comments="${comments:+$comments; }⚠️ SECURITY: Default ACCEPT policy - server accepts all connections!"
     fi
-    
+
     if [[ "$fw_active" == "INACTIVE" ]] && [[ "$fw_type" != "none" ]]; then
         comments="${comments:+$comments; }⚠️ Firewall installed but not active"
     fi
-    
+
     if [[ "$ssh_ok" == "NO" ]]; then
         comments="${comments:+$comments; }Cannot connect - check SSH access"
     fi
-    
+
     if [[ -z "$comments" ]]; then
         echo "OK"
     else
@@ -295,8 +305,8 @@ for server_config in "${SERVERS[@]}"; do
     
     fw_status=$(check_firewall_status "$hostname" "$port" "$user" "$firewall_type")
     IFS='|' read -r fw_active fw_policy <<< "$fw_status"
-    
-    comments=$(generate_comments "$fw_active" "$fw_policy" "$firewall_type" "$ssh_ok")
+
+    comments=$(generate_comments "$fw_active" "$fw_policy" "$firewall_type" "$ssh_ok" "$hostname")
     
     # Write to CSV
     echo "$hostname,$port,$user,$firewall_type,$ssh_ok,$script_installed,$cron_installed,$ssh_key_deployed,$nas_can_connect,$nas_blocked,$fw_active,$fw_policy,\"$os_distro\",\"$os_version\",\"$comments\"" >> "$OUTPUT_FILE"

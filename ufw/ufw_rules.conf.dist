@@ -7,7 +7,7 @@
 # COMMENT: UFW comment (optional)
 
 # Example: Allow all traffic from NAS1 (dynamic IP)
-nas1-all||nas1.example.com|Allow all from NAS1
+nas1-all|||nas1.example.com|Allow all from NAS1
 
 # Example: Allow SSH (port 22) from NAS1
 # nas1-ssh|tcp|22|nas1.example.com|SSH from NAS1

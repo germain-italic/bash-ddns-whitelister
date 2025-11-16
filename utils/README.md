@@ -54,6 +54,33 @@ Uninstalls DDNS scripts from all servers at once.
 ./uninstall-all.sh
 ```
 
+### sshd-match-address-update.sh
+Updates sshd Match Address blocks with dynamic DNS IPs. Useful for servers that restrict root login by IP.
+
+```bash
+./sshd-match-address-update.sh
+```
+
+**Requirements:**
+- The sshd_config must have a comment `# bash-ddns-whitelister: <identifier>` before the Match Address line
+- Must be run as root on the target server
+
+**Example sshd_config:**
+```
+# bash-ddns-whitelister: nas1
+Match Address 81.51.73.213,other.ip.here
+    PermitRootLogin prohibit-password
+```
+
+### generate-report.sh
+Generates comprehensive CSV reports with all server status information.
+
+```bash
+./generate-report.sh [output.csv]
+```
+
+Reports include: connectivity, script installation, cron status, SSH keys, firewall configuration, OS info, and security warnings.
+
 ## Configuration
 
 Copy and edit `.env`:

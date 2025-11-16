@@ -157,15 +157,16 @@ apply_rule() {
     local iptables_args
 
     if [[ "$action" == "add" ]]; then
-        iptables_args=$(echo "$rule" | sed 's/^-A/-A/')
+        # Keep -A or -I as is (no transformation needed for add)
+        iptables_args="$rule"
         # Add comment to identify rules managed by bash-ddns-whitelister
         # Only add if rule doesn't already have a comment
         if [[ ! "$iptables_args" =~ -m\ comment ]]; then
             iptables_args="$iptables_args -m comment --comment \"bash-ddns-whitelister\""
         fi
     else
-        # For delete, replace -A with -D
-        iptables_args=$(echo "$rule" | sed 's/^-A/-D/')
+        # For delete, replace -A or -I with -D (remove line number if present)
+        iptables_args=$(echo "$rule" | sed -E 's/^-[AI] ([A-Z]+) [0-9]+/-D \1/' | sed 's/^-A /-D /')
         # Add comment for deletion too (must match the rule exactly)
         if [[ ! "$iptables_args" =~ -m\ comment ]]; then
             iptables_args="$iptables_args -m comment --comment \"bash-ddns-whitelister\""
