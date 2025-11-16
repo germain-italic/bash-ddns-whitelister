@@ -1,0 +1,46 @@
+# Environment and configuration files (contain sensitive data)
+.env
+*/.env
+**/.env
+
+# Actual configuration files (contain real hostnames/IPs)
+dyndns_rules.conf
+*/dyndns_rules.conf
+**/dyndns_rules.conf
+
+firewall_rules.conf
+*/firewall_rules.conf
+**/firewall_rules.conf
+
+ufw_rules.conf
+*/ufw_rules.conf
+**/ufw_rules.conf
+
+# Cache directories (contain resolved IPs)
+.cache/
+*/.cache/
+**/.cache/
+
+# Logs (may contain sensitive information)
+*.log
+*/*.log
+**/*.log
+
+# SSH keys
+*.pub
+*.pem
+id_rsa*
+*.key
+
+# Cron logs
+cron.log
+*/cron.log
+**/cron.log
+
+# Backup files
+*.bak
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
