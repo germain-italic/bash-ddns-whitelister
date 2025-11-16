@@ -68,21 +68,18 @@ rotate_logs() {
 # Validate IPv4 address format
 validate_ipv4() {
     local ip=$1
-    local valid=1
 
     if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
         IFS='.' read -ra octets <<< "$ip"
         for octet in "${octets[@]}"; do
             if [[ $octet -gt 255 ]]; then
-                valid=0
-                break
+                return 1  # Invalid: octet > 255
             fi
         done
+        return 0  # Valid IP
     else
-        valid=0
+        return 1  # Invalid format
     fi
-
-    return $valid
 }
 
 # Resolve hostname to IP
