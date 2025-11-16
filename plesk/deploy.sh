@@ -70,7 +70,7 @@ echo -e "${YELLOW}Configuring .env...${NC}"
 ssh -p "${SSH_PORT}" "${SSH_USER}@${HOSTNAME}" bash << 'ENDSSH'
 set -e
 INSTALL_DIR="/root/bash-plesk-firewall-ddns"
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}/plesk"
 
 if [ ! -f ".env" ]; then
     echo "Creating .env from template..."
@@ -95,7 +95,7 @@ echo -e "${YELLOW}Configuring firewall_rules.conf...${NC}"
 ssh -p "${SSH_PORT}" "${SSH_USER}@${HOSTNAME}" bash << 'ENDSSH'
 set -e
 INSTALL_DIR="/root/bash-plesk-firewall-ddns"
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}/plesk"
 
 if [ ! -f "firewall_rules.conf" ]; then
     echo "Creating firewall_rules.conf..."
@@ -120,11 +120,11 @@ set -e
 INSTALL_DIR="/root/bash-plesk-firewall-ddns"
 
 # Check if cron job already exists
-if crontab -l 2>/dev/null | grep -q "${INSTALL_DIR}/update.sh"; then
+if crontab -l 2>/dev/null | grep -q "${INSTALL_DIR}/plesk/update.sh"; then
     echo "Cron job already exists, skipping"
 else
     echo "Adding cron job..."
-    (crontab -l 2>/dev/null || true; echo "*/5 * * * * ${INSTALL_DIR}/update.sh >> ${INSTALL_DIR}/cron.log 2>&1") | crontab -
+    (crontab -l 2>/dev/null || true; echo "*/5 * * * * ${INSTALL_DIR}/plesk/update.sh >> ${INSTALL_DIR}/plesk/cron.log 2>&1") | crontab -
 fi
 ENDSSH
 echo -e "${GREEN}✓ Cron job configured${NC}"
@@ -135,7 +135,7 @@ echo -e "${YELLOW}Running initial update...${NC}"
 ssh -p "${SSH_PORT}" "${SSH_USER}@${HOSTNAME}" bash << 'ENDSSH'
 set -e
 INSTALL_DIR="/root/bash-plesk-firewall-ddns"
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}/plesk"
 ./update.sh
 ENDSSH
 echo -e "${GREEN}✓ Initial update completed${NC}"
@@ -144,4 +144,4 @@ echo
 echo -e "${GREEN}=== Deployment completed successfully ===${NC}"
 echo
 echo "You can check the logs with:"
-echo "  ssh -p ${SSH_PORT} ${SSH_USER}@${HOSTNAME} 'tail -f ${INSTALL_DIR}/update.log'"
+echo "  ssh -p ${SSH_PORT} ${SSH_USER}@${HOSTNAME} 'tail -f ${INSTALL_DIR}/plesk/update.log'"
