@@ -81,7 +81,8 @@ for server_config in "${SERVERS[@]}"; do
             ;;
     esac
 
-    cron_output=$(ssh -p "$port" -o ConnectTimeout=10 "${user}@${hostname}" "crontab -l 2>/dev/null | grep '$cron_pattern' || echo ''" 2>&1)
+    # Capture only stdout (cron output), stderr is discarded to avoid false positives from .bashrc errors
+    cron_output=$(ssh -p "$port" -o ConnectTimeout=10 "${user}@${hostname}" "crontab -l 2>/dev/null | grep '$cron_pattern' || true" 2>/dev/null)
 
     if [[ $? -ne 0 ]]; then
         echo -e "${RED}ERROR (connection failed)${NC}"
@@ -89,9 +90,10 @@ for server_config in "${SERVERS[@]}"; do
         continue
     fi
 
-    if [[ -n "$cron_output" ]]; then
+    # Check if output contains actual cron lines (starts with timing or contains the pattern)
+    if [[ -n "$cron_output" ]] && echo "$cron_output" | grep -qE "^\*/|$cron_pattern"; then
         echo -e "${GREEN}✓ Cron installed${NC}"
-        echo "  $cron_output" | sed 's/^/    /'
+        echo "$cron_output" | sed 's/^/    /'
         has_cron=$((has_cron + 1))
     else
         echo -e "${RED}✗ No cron found${NC}"
