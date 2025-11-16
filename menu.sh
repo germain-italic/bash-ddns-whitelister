@@ -259,11 +259,12 @@ verification_menu() {
     echo -e "${BOLD}${BLUE}Verification & Testing${NC}"
     print_separator
     echo
-    print_option "1" "Verify cron cleanup on all servers" "$BLUE"
-    print_option "2" "Test NAS blocking on all servers" "$BLUE"
-    print_option "3" "Test connectivity from NAS" "$BLUE"
-    print_option "4" "Check DNS resolution" "$BLUE"
-    print_option "5" "View deployment status" "$BLUE"
+    print_option "1" "Verify cron jobs installed on servers" "$BLUE"
+    print_option "2" "Verify cron cleanup on all servers" "$BLUE"
+    print_option "3" "Test NAS blocking on all servers" "$BLUE"
+    print_option "4" "Test connectivity from NAS" "$BLUE"
+    print_option "5" "Check DNS resolution" "$BLUE"
+    print_option "6" "View deployment status" "$BLUE"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -272,11 +273,12 @@ verification_menu() {
     read choice
 
     case $choice in
-        1) verify_cron ;;
-        2) test_nas_blocking ;;
-        3) test_connectivity ;;
-        4) check_dns ;;
-        5) view_status ;;
+        1) verify_cron_installed ;;
+        2) verify_cron ;;
+        3) test_nas_blocking ;;
+        4) test_connectivity ;;
+        5) check_dns ;;
+        6) view_status ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -893,6 +895,27 @@ test_connectivity() {
 
     wait_for_key
     utilities_menu
+}
+
+# Verify cron jobs installed
+verify_cron_installed() {
+    print_header
+    echo -e "${BOLD}${BLUE}Verify Cron Jobs Installed${NC}"
+    print_separator
+    echo
+    cd "${REPO_DIR}/utils"
+
+    if [ ! -f .env ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        wait_for_key
+        verification_menu
+        return
+    fi
+
+    ./verify-cron-installed.sh
+
+    wait_for_key
+    verification_menu
 }
 
 # Verify cron cleanup

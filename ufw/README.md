@@ -1,110 +1,52 @@
-# bash-ufw-ddns
+# UFW DDNS Whitelister
 
-Automatic UFW firewall rules updater for dynamic hostnames.
+Automatic UFW firewall rule management for dynamic DNS hostnames.
 
-This script automatically updates UFW firewall rules when IP addresses of dynamic hostnames change. Perfect for managing access from servers with dynamic IPs (like Synology NAS with DDNS).
+## Quick Start
 
-## Features
-
-- 🔄 Automatic IP resolution and UFW rule updates
-- 💾 DNS caching to minimize unnecessary updates
-- 📝 Detailed logging with automatic rotation
-- ⏰ Cron-ready for periodic execution
-- 🔒 Safe rule management (delete old, add new)
-
-## Installation
-
-1. Clone this repository:
 ```bash
-git clone https://github.com/germain-italic/bash-ufw-ddns
-cd bash-ufw-ddns
-```
+# Deploy to a server
+./deploy.sh server.example.com 22 root
 
-2. Copy and configure the environment file:
-```bash
-cp .env.dist .env
-# Edit .env if needed (default values should work)
-```
-
-3. Copy and configure the rules file:
-```bash
-cp ufw_rules.conf.dist ufw_rules.conf
-# Edit ufw_rules.conf to add your dynamic hostnames
-```
-
-4. Test the script:
-```bash
-sudo ./update.sh
-```
-
-5. Add to crontab for automatic updates (every 5 minutes):
-```bash
-crontab -e
-# Add this line:
-*/5 * * * * /root/bash-ufw-ddns/update.sh >> /root/bash-ufw-ddns/cron.log 2>&1
+# Check logs on remote server
+ssh root@server 'tail -f /root/bash-ufw-ddns/ufw/update.log'
 ```
 
 ## Configuration
 
+### ufw_rules.conf
+
+Pipe-delimited format: `RULE_NAME|PROTO|PORT|HOSTNAME|COMMENT`
+
+```bash
+# Allow all traffic from NAS (dynamic IP)
+nas1-all|tcp||nas.example.com|Allow all from NAS
+
+# Allow SSH from office
+office-ssh|tcp|22|office.example.com|Office SSH access
+```
+
+Leave PORT empty for "allow from IP" (all ports).
+
 ### .env
 
 ```bash
-# DNS nameserver for hostname resolution
 DNS_NAMESERVER=1.1.1.1
-
-# Log rotation (keep logs older than N hours)
 LOG_ROTATION_HOURS=168
 ```
 
-### ufw_rules.conf
+## How It Works
 
-Format: `RULE_NAME|PROTO|PORT|HOSTNAME|COMMENT`
+1. Script reads `ufw_rules.conf`
+2. Resolves hostname to IP via DNS
+3. Compares with cached IP (`.cache/` directory)
+4. If changed: deletes old UFW rule, adds new rule with updated IP
+5. All rules tagged with `[bash-ddns-whitelister]` comment
 
-- **PROTO**: `tcp` or `udp` (leave empty for all)
-- **PORT**: port number (leave empty for all ports)
-- **HOSTNAME**: dynamic hostname to resolve
-- **COMMENT**: UFW comment (optional)
+## Uninstall
 
-Example:
-```
-# Allow all traffic from NAS1
-nas1-all||nas1.example.com|Allow all from NAS1
-
-# Allow SSH from NAS1
-nas1-ssh|tcp|22|nas1.example.com|SSH from NAS1
-
-# Allow MySQL from NAS1
-nas1-mysql|tcp|3306|nas1.example.com|MySQL from NAS1
+```bash
+./uninstall.sh server.example.com 22 root
 ```
 
-## How it works
-
-1. Reads `ufw_rules.conf` for rules with dynamic hostnames
-2. Resolves each hostname to its current IP using DNS
-3. Compares with cached IP (from previous run)
-4. If IP changed:
-   - Deletes old UFW rule with old IP
-   - Adds new UFW rule with new IP
-   - Updates cache with new IP
-5. Logs all changes to `update.log`
-
-## Logs
-
-- **update.log**: Main log file with all IP changes and actions
-- **cron.log**: Cron execution log
-- Logs are automatically rotated based on `LOG_ROTATION_HOURS`
-
-## Requirements
-
-- Root access (UFW management)
-- UFW installed and active
-- `dig` or `host` command for DNS resolution
-- Bash 4.0+
-
-## License
-
-MIT License - See LICENSE file
-
-## Author
-
-Italic Agency
+See main [README](../README.md) for complete documentation.
