@@ -1,200 +1,220 @@
-# CLAUDE.md - bash-ddns-whitelister
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Overview
 
-This repository contains scripts for automatic firewall whitelist management for dynamic DNS hostnames. It supports multiple firewall types: iptables, Plesk Firewall, and UFW.
+This repository provides automatic firewall whitelist management for dynamic DNS hostnames across three firewall types: iptables, Plesk Firewall, and UFW. Each implementation follows the same architecture pattern but uses different APIs/commands.
 
-## Repository Structure
+## Architecture Pattern
 
+All three firewall implementations share a common architecture:
+
+### Core Components (Shared Pattern)
+
+1. **update.sh** - Main update script that:
+   - Resolves hostnames to IPs using DNS nameserver
+   - Compares against cached IPs in `.cache/` directory
+   - When IP changes: deletes old rule, adds new rule, updates cache
+   - Logs all changes with timestamps
+   - Rotates logs based on `LOG_ROTATION_HOURS`
+   - Runs via cron every 5 minutes
+
+2. **deploy.sh** - Deployment script that:
+   - Clones/updates repo from GitHub on remote server
+   - Creates `.env` and rules config from templates if missing
+   - Sets up cron job for periodic updates
+   - Runs initial update
+
+3. **Configuration Files**:
+   - `.env` - Environment variables (DNS nameserver, log rotation)
+   - Rules config - Firewall-specific rule definitions (varies by type)
+   - `.cache/*.cache` - Cached IPs for each hostname (auto-generated)
+
+### Implementation Differences
+
+**iptables** (`iptables/`):
+- Rules format: Standard iptables syntax (e.g., `-A INPUT -s hostname -j ACCEPT`)
+- Updates: Extract hostnames via regex, replace with IPs, apply with `iptables` command
+- Config: `dyndns_rules.conf`
+
+**Plesk** (`plesk/`):
+- Rules format: Pipe-delimited (`RULE_NAME|DIRECTION|ACTION|PORTS|HOSTNAME|COMMENT`)
+- Updates: Uses `plesk ext firewall` CLI, updates by rule name or ID
+- Config: `firewall_rules.conf`
+- Special: Requires `--apply -auto-confirm-this-may-lock-me-out-of-the-server` after changes
+
+**UFW** (`ufw/`):
+- Rules format: Pipe-delimited (`RULE_NAME|PROTO|PORT|HOSTNAME|COMMENT`)
+- Updates: Uses `ufw` commands (delete old, add new)
+- Config: `ufw_rules.conf`
+
+### Utility Scripts (`utils/`)
+
+- **detect-firewall.sh** - Auto-detects firewall type on remote servers
+- **deploy-ssh-keys.sh** - Deploys SSH keys to multiple servers for passwordless access
+- **test-nas-connectivity.sh** - Tests connectivity from NAS to all configured servers
+
+## Common Commands
+
+### Deployment Workflow
+
+```bash
+# 1. Detect firewall types on servers
+cd utils
+cp .env.dist .env  # Edit with your server list
+./detect-firewall.sh
+
+# 2. Deploy SSH keys to all servers
+./deploy-ssh-keys.sh
+
+# 3. Deploy to servers based on firewall type
+cd ../iptables
+./deploy.sh server.example.com 22 root
+
+cd ../plesk
+./deploy.sh server.example.com 22 root
+
+cd ../ufw
+./deploy.sh server.example.com 22 root
+
+# 4. Test connectivity from NAS
+ssh root@nas
+./test-nas-connectivity.sh server1:22:root server2:22:root
 ```
-bash-ddns-whitelister/
-├── iptables/          # iptables firewall management
-│   ├── update.sh      # Main update script
-│   ├── deploy.sh      # Deployment script
-│   ├── .env.dist      # Environment template
-│   └── dyndns_rules.conf.dist  # Rules template
-├── plesk/             # Plesk Firewall management
-│   ├── update.sh
-│   ├── deploy.sh
-│   ├── .env.dist
-│   └── firewall_rules.conf.dist
-├── ufw/               # UFW firewall management
-│   ├── update.sh
-│   ├── deploy.sh
-│   ├── .env.dist
-│   └── ufw_rules.conf.dist
-└── utils/             # Utility scripts
-    ├── detect-firewall.sh      # Auto-detect firewall type
-    ├── deploy-ssh-keys.sh      # Deploy SSH keys to servers
-    └── test-nas-connectivity.sh # Test connectivity from NAS
+
+### Monitoring
+
+```bash
+# Check logs on remote server
+ssh root@server 'tail -f /root/bash-iptables-ddns/update.log'
+ssh root@server 'tail -f /root/bash-plesk-firewall-ddns/update.log'
+ssh root@server 'tail -f /root/bash-ufw-ddns/update.log'
+
+# Verify cron job
+ssh root@server 'crontab -l | grep update.sh'
+
+# Test DNS resolution
+dig @1.1.1.1 hostname.example.com
 ```
 
-## Important Security Notes
+### Local Testing
 
-### Files that MUST NOT be committed
+```bash
+# Test scripts with syntax check
+bash -n iptables/update.sh
+bash -n plesk/update.sh
+bash -n ufw/update.sh
 
-1. **Configuration files** containing real data:
-   - `.env` (contains real hostnames, IPs, SSH keys)
-   - `dyndns_rules.conf` / `firewall_rules.conf` / `ufw_rules.conf`
-   - Any `*.log` files
-   - `.cache/` directories
+# Dry run deployment utilities
+cd utils
+./deploy-ssh-keys.sh --dry-run
+```
 
-2. **Template files** are safe to commit:
-   - `.env.dist`
-   - `*_rules.conf.dist`
-   - These contain example/placeholder data only
+## Critical Security Rules
 
-3. **Scripts** are safe to commit:
-   - All `.sh` scripts
-   - `README.md` files
-   - Documentation
+### Files That MUST NOT Be Committed
 
-### Current .gitignore
+**Configuration files** containing real data are gitignored:
+- `.env` files (contain real hostnames, IPs, SSH keys)
+- `dyndns_rules.conf` / `firewall_rules.conf` / `ufw_rules.conf` (real firewall rules)
+- `*.log` files
+- `.cache/` directories
 
-The `.gitignore` is configured to exclude ALL sensitive files. Always verify before committing:
+**Template files** are safe to commit:
+- `.env.dist` (example configuration)
+- `*_rules.conf.dist` (example rules)
+
+Always verify before committing:
 ```bash
 git status
 git diff --cached
 ```
 
-## Development Workflow
+## Configuration Format Reference
 
-### Adding New Features
+### .env File
 
-1. Test locally first
-2. Update appropriate subdirectory (iptables/plesk/ufw/utils)
-3. Update relevant README.md
-4. Verify no sensitive data: `git status`
-5. Commit and push
-
-### Deploying to Servers
-
-1. Use `utils/detect-firewall.sh` to identify firewall types
-2. Use `utils/deploy-ssh-keys.sh` to deploy SSH access
-3. Use appropriate `*/deploy.sh` script for each firewall type
-4. Test with `utils/test-nas-connectivity.sh` (run from NAS)
-
-## Configuration Format
-
-### .env file (template in .env.dist)
-
-Contains:
-- DNS nameserver
-- Log rotation settings
-- Example hostnames (anonymized)
-
-**NEVER commit the actual .env file**
-
-### Rules configuration files
-
-**iptables** (dyndns_rules.conf):
+```bash
+DNS_NAMESERVER=1.1.1.1          # DNS server for resolution
+LOG_ROTATION_HOURS=168          # Keep logs for N hours (default: 7 days)
 ```
-# Format: standard iptables rules
+
+### iptables Rules (dyndns_rules.conf)
+
+Standard iptables syntax with hostnames:
+```
 -A INPUT -s dynamic.hostname.example -j ACCEPT
+-A INPUT -s nas.example.com -p tcp --dport 22 -j ACCEPT
 ```
 
-**Plesk** (firewall_rules.conf):
-```
-# Format: RULE_NAME|DIRECTION|ACTION|PORTS|HOSTNAME|COMMENT
-rule1|input|allow||dynamic.hostname.example|Description
-```
+### Plesk Rules (firewall_rules.conf)
 
-**UFW** (ufw_rules.conf):
+Format: `RULE_NAME|DIRECTION|ACTION|PORTS|HOSTNAME|COMMENT`
 ```
-# Format: RULE_NAME|PROTO|PORT|HOSTNAME|COMMENT
-rule1|tcp|22|dynamic.hostname.example|SSH access
+nas_access|input|allow||nas.example.com|NAS full access
+ssh_nas|input|allow|22|nas.example.com|SSH from NAS
 ```
 
-## Testing
+### UFW Rules (ufw_rules.conf)
 
-### Local Testing
-
-Before deploying, test scripts locally:
-```bash
-# Dry run
-./utils/deploy-ssh-keys.sh --dry-run
-
-# Test firewall detection
-./utils/detect-firewall.sh
+Format: `RULE_NAME|PROTO|PORT|HOSTNAME|COMMENT`
+```
+nas_ssh|tcp|22|nas.example.com|SSH access from NAS
+nas_https|tcp|443|nas.example.com|HTTPS from NAS
 ```
 
-### Production Testing
+## Key Implementation Details
 
-After deployment:
-```bash
-# Check logs on remote server
-ssh root@server 'tail -f /root/bash-iptables-ddns/update.log'
+### DNS Resolution Fallback Chain
 
-# Test from NAS
-ssh root@nas
-./test-nas-connectivity.sh server1:22:root server2:22:root
-```
+All update scripts use this resolution order:
+1. `dig +short @$nameserver` (preferred)
+2. `host $hostname $nameserver` (fallback)
+3. `getent hosts` (last resort)
 
-## Troubleshooting
+### Caching Mechanism
 
-### Script fails with "unbound variable"
+- Each hostname gets a cache file: `.cache/hostname_with_dots_as_underscores.cache`
+- Contains single line with current IP
+- Only updates firewall when cached IP != resolved IP
+- Prevents unnecessary rule churn
 
-- Check that all fields in rules config are present
-- Use `:-` default values for optional fields
+### Log Rotation
 
-### DNS resolution fails
+- Automatically rotates based on `LOG_ROTATION_HOURS` (default: 168 = 1 week)
+- Uses timestamp-based filtering to keep recent entries
+- Runs on every script execution
 
-- Verify `DNS_NAMESERVER` in .env
-- Test manually: `dig @1.1.1.1 hostname.example.com`
+### Cron Setup
 
-### Firewall rules not updating
-
-- Check cron is running: `crontab -l`
-- Verify script has execute permissions
-- Check logs for errors
-
-### SSH connection fails
-
-- Verify SSH keys are deployed
-- Check firewall allows your IP
-- Test manually: `ssh -p 22 user@server`
-
-## Cron Setup
-
-All update scripts run via cron every 5 minutes:
+All scripts deployed to run every 5 minutes:
 ```cron
 */5 * * * * /root/bash-iptables-ddns/update.sh >> /root/bash-iptables-ddns/cron.log 2>&1
 */5 * * * * /root/bash-plesk-firewall-ddns/update.sh >> /root/bash-plesk-firewall-ddns/cron.log 2>&1
 */5 * * * * /root/bash-ufw-ddns/update.sh >> /root/bash-ufw-ddns/cron.log 2>&1
 ```
 
-## Log Management
+## Common Issues
 
-Logs are automatically rotated based on `LOG_ROTATION_HOURS` setting in `.env` (default: 168 hours = 1 week).
+### "unbound variable" errors
+- Check that all pipe-delimited fields are present in rules config
+- Ensure `set -euo pipefail` compatibility by providing default values with `${VAR:-default}`
 
-## Security Best Practices
+### DNS resolution failures
+- Verify `DNS_NAMESERVER` in `.env`
+- Test manually: `dig @1.1.1.1 hostname.example.com`
+- Check network connectivity from server
 
-1. **Never commit sensitive data**
-   - Use `.env.dist` templates only
-   - Keep real `.env` files local/on servers only
+### Rules not updating
+- Verify cron is running: `crontab -l`
+- Check script has execute permissions: `chmod +x update.sh`
+- Review logs for errors
 
-2. **Use SSH keys only**
-   - No password authentication
-   - Restrict key access to specific IPs when possible
+### Plesk-specific: Changes not applied
+- Ensure `--apply -auto-confirm-this-may-lock-me-out-of-the-server` is used
+- Check Plesk firewall extension is installed: `plesk ext firewall --list`
 
-3. **Monitor logs**
-   - Regularly check update logs
-   - Watch for DNS resolution failures
-   - Alert on repeated failures
-
-4. **Test before deploying**
-   - Always use --dry-run first
-   - Test on non-production servers first
-   - Verify firewall rules don't lock you out
-
-## Support
-
-For issues or questions:
-1. Check logs on affected server
-2. Verify configuration files
-3. Test DNS resolution manually
-4. Check firewall allows required ports
-
-## License
-
-MIT License - See LICENSE file
+### UFW-specific: Rule duplicates
+- UFW may create duplicate rules if not properly deleted first
+- Script deletes old IP rule before adding new one to prevent this
