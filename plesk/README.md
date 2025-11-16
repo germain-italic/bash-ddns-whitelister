@@ -44,9 +44,9 @@ LOG_ROTATION_HOURS=168
 Pipe-separated format: `RULE_NAME|DIRECTION|ACTION|PORTS|HOSTNAME|COMMENT`
 
 ```bash
-nas1-ssh|input|allow|22/tcp|nas1.synology.me|Allow SSH from NAS1
-nas2-web|input|allow|80/tcp,443/tcp|nas2.synology.me|Allow web from NAS2
-nas1-all|input|allow||nas1.synology.me|Allow all from NAS1
+nas1-ssh|input|allow|22/tcp|nas1.example.com|Allow SSH from NAS1
+nas2-web|input|allow|80/tcp,443/tcp|nas2.example.com|Allow web from NAS2
+nas1-all|input|allow||nas1.example.com|Allow all from NAS1
 ```
 
 **Fields:**
@@ -129,12 +129,12 @@ bash-plesk-firewall-ddns/
 **Rules not applied**
 - Check logs: `cat update.log`
 - Verify Plesk firewall is enabled: `plesk ext firewall --list`
-- Test DNS resolution: `dig +short nas1.synology.me`
+- Test DNS resolution: `dig +short nas1.example.com`
 
 **IP not updating**
 - Check cache: `cat .cache/*.cache`
 - Force update: `rm -rf .cache/`
-- Verify hostname resolves: `host nas1.synology.me`
+- Verify hostname resolves: `host nas1.example.com`
 
 ## License
 

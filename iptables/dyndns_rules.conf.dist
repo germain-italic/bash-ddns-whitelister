@@ -3,18 +3,18 @@
 # Hostnames will be automatically resolved and updated
 
 # Example: Allow SSH from NAS1 (dynamic IP)
-# -A INPUT -p tcp -s nas1.synology.me --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+# -A INPUT -p tcp -s nas1.example.com --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
 
 # Example: Allow all traffic from NAS1
-# -A INPUT -i eth0 -s nas1.synology.me -j ACCEPT
+# -A INPUT -i eth0 -s nas1.example.com -j ACCEPT
 
 # Example: NAT/Port forwarding from NAS1
-# -A PREROUTING -i eth0 -s nas1.synology.me -p tcp --dport 443 -j DNAT --to-destination 192.168.1.100:8443 -t nat
+# -A PREROUTING -i eth0 -s nas1.example.com -p tcp --dport 443 -j DNAT --to-destination 192.168.1.100:8443 -t nat
 
 # Example: Allow multiple ports from NAS2
-# -A INPUT -p tcp -s nas2.synology.me --dport 22 -j ACCEPT
-# -A INPUT -p tcp -s nas2.synology.me --dport 80 -j ACCEPT
-# -A INPUT -p tcp -s nas2.synology.me --dport 443 -j ACCEPT
+# -A INPUT -p tcp -s nas2.example.com --dport 22 -j ACCEPT
+# -A INPUT -p tcp -s nas2.example.com --dport 80 -j ACCEPT
+# -A INPUT -p tcp -s nas2.example.com --dport 443 -j ACCEPT
 
 # ACTIVE RULES (uncomment and adapt to your needs)
 

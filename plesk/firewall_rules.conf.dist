@@ -10,12 +10,12 @@
 #   COMMENT    : Optional description
 
 # Example: Allow SSH from NAS1 (dynamic IP)
-# nas1-ssh|input|allow|22/tcp|nas1.synology.me|Allow SSH from NAS1
+# nas1-ssh|input|allow|22/tcp|nas1.example.com|Allow SSH from NAS1
 
 # Example: Allow HTTP and HTTPS from NAS2
-# nas2-web|input|allow|80/tcp,443/tcp|nas2.synology.me|Allow web from NAS2
+# nas2-web|input|allow|80/tcp,443/tcp|nas2.example.com|Allow web from NAS2
 
 # Example: Allow all traffic from NAS1
-# nas1-all|input|allow||nas1.synology.me|Allow all from NAS1
+# nas1-all|input|allow||nas1.example.com|Allow all from NAS1
 
 # ACTIVE RULES (uncomment and adapt to your needs)

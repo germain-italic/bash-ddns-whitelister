@@ -37,8 +37,8 @@ LOG_ROTATION_HOURS=168
 Standard iptables rules format (like `iptables -S` output):
 
 ```bash
--A INPUT -p tcp -s nas1.synology.me --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
--A INPUT -i eth0 -s nas1.synology.me -j ACCEPT
+-A INPUT -p tcp -s nas1.example.com --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+-A INPUT -i eth0 -s nas1.example.com -j ACCEPT
 ```
 
 ### Testing
@@ -79,25 +79,25 @@ scripts/
 **Allow SSH from NAS**
 
 ```bash
--A INPUT -p tcp -s nas1.synology.me --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+-A INPUT -p tcp -s nas1.example.com --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
 ```
 
 **Allow all traffic from NAS**
 
 ```bash
--A INPUT -i eth0 -s nas1.synology.me -j ACCEPT
+-A INPUT -i eth0 -s nas1.example.com -j ACCEPT
 ```
 
 **NAT/Port forwarding**
 
 ```bash
--A PREROUTING -i eth0 -s nas1.synology.me -p tcp --dport 443 -j DNAT --to-destination 192.168.1.100:8443 -t nat
+-A PREROUTING -i eth0 -s nas1.example.com -p tcp --dport 443 -j DNAT --to-destination 192.168.1.100:8443 -t nat
 ```
 
 **Allow multiple ports**
 
 ```bash
--A INPUT -p tcp -s nas2.synology.me -m multiport --dports 22,80,443 -j ACCEPT
+-A INPUT -p tcp -s nas2.example.com -m multiport --dports 22,80,443 -j ACCEPT
 ```
 
 ### How It Works

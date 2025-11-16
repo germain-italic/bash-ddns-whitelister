@@ -8,7 +8,7 @@ HOSTNAME="$1"
 SSH_PORT="${2:-22}"
 SSH_USER="${3:-root}"
 INSTALL_DIR="/root/bash-iptables-ddns"
-REPO_URL="https://github.com/germain-italic/bash-iptables-ddns"
+REPO_URL="https://github.com/germain-italic/bash-ddns-whitelister"
 
 # Colors for output
 RED='\033[0;31m'
@@ -41,7 +41,7 @@ echo -e "${YELLOW}Installing repository...${NC}"
 ssh -p "${SSH_PORT}" "${SSH_USER}@${HOSTNAME}" bash << 'ENDSSH'
 set -e
 INSTALL_DIR="/root/bash-iptables-ddns"
-REPO_URL="https://github.com/germain-italic/bash-iptables-ddns"
+REPO_URL="https://github.com/germain-italic/bash-ddns-whitelister"
 
 if [ -d "${INSTALL_DIR}" ]; then
     echo "Directory exists, pulling latest changes..."
@@ -75,8 +75,8 @@ LOG_ROTATION_HOURS=168
 
 # Dynamic hostnames to monitor (optional, for reference only)
 # Script automatically detects hostnames in rules
-NAS1_HOSTNAME=nas1.synology.me
-NAS2_HOSTNAME=nas2.synology.me
+NAS1_HOSTNAME=nas1.example.com
+NAS2_HOSTNAME=nas2.example.com
 EOF
 else
     echo ".env already exists, skipping"

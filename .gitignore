@@ -3,6 +3,16 @@
 */.env
 **/.env
 
+# But allow .env.dist templates
+!.env.dist
+!*/.env.dist
+!**/.env.dist
+
+# Server list and session notes (contain real server info)
+SERVEURS_SOURCES.md
+SESSION.md
+LOCAL_FILES.md
+
 # Actual configuration files (contain real hostnames/IPs)
 dyndns_rules.conf
 */dyndns_rules.conf
