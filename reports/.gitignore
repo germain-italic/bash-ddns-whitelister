@@ -1,1 +1,2 @@
-reports/
+# Ignore all CSV files (contain server information)
+*.csv
