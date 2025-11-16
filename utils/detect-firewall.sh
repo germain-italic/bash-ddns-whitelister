@@ -65,11 +65,11 @@ detect_firewall() {
     fi
 
     # Detect firewall type
-    # Priority: 1. Plesk, 2. UFW, 3. iptables, 4. none
+    # Priority: 1. Plesk Firewall, 2. UFW, 3. iptables, 4. none
     local firewall_type="none"
 
-    # Check for Plesk first
-    if ssh $SSH_OPTS -p "$port" "${user}@${hostname}" "command -v plesk > /dev/null 2>&1" 2>/dev/null; then
+    # Check for Plesk Firewall first (not just Plesk, but the Firewall module)
+    if ssh $SSH_OPTS -p "$port" "${user}@${hostname}" "command -v plesk > /dev/null 2>&1 && plesk ext firewall --help > /dev/null 2>&1" 2>/dev/null; then
         firewall_type="plesk"
         echo -e "  ${CYAN}Firewall: Plesk Firewall${NC}"
         PLESK_COUNT=$((PLESK_COUNT + 1))
