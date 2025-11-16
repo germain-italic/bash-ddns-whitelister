@@ -62,18 +62,46 @@ rotate_logs() {
     fi
 }
 
+# Validate IPv4 address format
+validate_ipv4() {
+    local ip=$1
+    local valid=1
+
+    if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        IFS='.' read -ra octets <<< "$ip"
+        for octet in "${octets[@]}"; do
+            if [[ $octet -gt 255 ]]; then
+                valid=0
+                break
+            fi
+        done
+    else
+        valid=0
+    fi
+
+    return $valid
+}
+
 # Resolve hostname to IP
 resolve_hostname() {
     local hostname="$1"
     local nameserver="${DNS_NAMESERVER:-1.1.1.1}"
+    local ip
 
     # DNS resolution with dig or host fallback
     if command -v dig &> /dev/null; then
-        dig +short "@$nameserver" "$hostname" A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1
+        ip=$(dig +short "@$nameserver" "$hostname" A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
     elif command -v host &> /dev/null; then
-        host "$hostname" "$nameserver" | grep "has address" | awk '{print $4}' | head -n1
+        ip=$(host "$hostname" "$nameserver" | grep "has address" | awk '{print $4}' | head -n1)
     else
-        getent hosts "$hostname" | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1
+        ip=$(getent hosts "$hostname" | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+    fi
+
+    # Validate IP format
+    if [[ -n "$ip" ]] && validate_ipv4 "$ip"; then
+        echo "$ip"
+    else
+        echo ""
     fi
 }
 
@@ -111,7 +139,10 @@ replace_hostname_with_ip() {
     local hostname="$2"
     local ip="$3"
 
-    echo "$rule" | sed "s/$hostname/$ip/g"
+    # Escape special regex characters in hostname for safe sed replacement
+    local escaped_hostname=$(printf '%s\n' "$hostname" | sed 's/[.[\*^$()+?{|]/\\&/g')
+
+    echo "$rule" | sed "s/$escaped_hostname/$ip/g"
 }
 
 # Apply iptables rule
@@ -119,22 +150,28 @@ apply_rule() {
     local rule="$1"
     local action="$2"  # "add" or "delete"
 
-    # Convert rule to iptables command
-    local cmd="iptables"
-
-    if [[ "$action" == "add" ]]; then
-        cmd="$cmd $(echo "$rule" | sed 's/^-A/-A/')"
-    else
-        # For delete, replace -A with -D
-        cmd="$cmd $(echo "$rule" | sed 's/^-A/-D/')"
+    # Validate rule doesn't contain dangerous characters
+    if [[ "$rule" =~ [\;\|\&\`\$\(\)] ]]; then
+        log "ERROR: Rule contains forbidden characters: $rule"
+        return 1
     fi
 
-    # Execute command
-    if eval "$cmd" 2>/dev/null; then
-        log "Rule ${action}: $cmd"
+    # Convert rule to iptables arguments
+    local iptables_args
+
+    if [[ "$action" == "add" ]]; then
+        iptables_args=$(echo "$rule" | sed 's/^-A/-A/')
+    else
+        # For delete, replace -A with -D
+        iptables_args=$(echo "$rule" | sed 's/^-A/-D/')
+    fi
+
+    # Execute command directly without eval (safer)
+    if iptables $iptables_args 2>/dev/null; then
+        log "Rule ${action}: iptables $iptables_args"
         return 0
     else
-        log "ERROR executing: $cmd"
+        log "ERROR executing: iptables $iptables_args"
         return 1
     fi
 }

@@ -62,18 +62,46 @@ rotate_logs() {
     fi
 }
 
+# Validate IPv4 address format
+validate_ipv4() {
+    local ip=$1
+    local valid=1
+
+    if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        IFS='.' read -ra octets <<< "$ip"
+        for octet in "${octets[@]}"; do
+            if [[ $octet -gt 255 ]]; then
+                valid=0
+                break
+            fi
+        done
+    else
+        valid=0
+    fi
+
+    return $valid
+}
+
 # Resolve hostname to IP
 resolve_hostname() {
     local hostname="$1"
     local nameserver="${DNS_NAMESERVER:-1.1.1.1}"
+    local ip
 
     # DNS resolution with dig or host fallback
     if command -v dig &> /dev/null; then
-        dig +short "@$nameserver" "$hostname" A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1
+        ip=$(dig +short "@$nameserver" "$hostname" A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
     elif command -v host &> /dev/null; then
-        host "$hostname" "$nameserver" | grep "has address" | awk '{print $4}' | head -n1
+        ip=$(host "$hostname" "$nameserver" | grep "has address" | awk '{print $4}' | head -n1)
     else
-        getent hosts "$hostname" | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1
+        ip=$(getent hosts "$hostname" | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+    fi
+
+    # Validate IP format
+    if [[ -n "$ip" ]] && validate_ipv4 "$ip"; then
+        echo "$ip"
+    else
+        echo ""
     fi
 }
 

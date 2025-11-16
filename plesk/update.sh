@@ -65,17 +65,45 @@ rotate_logs() {
     fi
 }
 
+# Validate IPv4 address format
+validate_ipv4() {
+    local ip=$1
+    local valid=1
+
+    if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        IFS='.' read -ra octets <<< "$ip"
+        for octet in "${octets[@]}"; do
+            if [[ $octet -gt 255 ]]; then
+                valid=0
+                break
+            fi
+        done
+    else
+        valid=0
+    fi
+
+    return $valid
+}
+
 # Resolve hostname to IP
 resolve_hostname() {
     local hostname="$1"
     local nameserver="${DNS_NAMESERVER:-1.1.1.1}"
+    local ip
 
     if command -v dig &> /dev/null; then
-        dig +short "@$nameserver" "$hostname" A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1
+        ip=$(dig +short "@$nameserver" "$hostname" A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
     elif command -v host &> /dev/null; then
-        host "$hostname" "$nameserver" | grep "has address" | awk '{print $4}' | head -n1
+        ip=$(host "$hostname" "$nameserver" | grep "has address" | awk '{print $4}' | head -n1)
     else
-        getent hosts "$hostname" | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1
+        ip=$(getent hosts "$hostname" | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+    fi
+
+    # Validate IP format
+    if [[ -n "$ip" ]] && validate_ipv4 "$ip"; then
+        echo "$ip"
+    else
+        echo ""
     fi
 }
 
@@ -103,8 +131,37 @@ cache_ip() {
 # Get Plesk firewall rule ID by name
 get_rule_id() {
     local rule_name="$1"
+    # Pass rule_name as argument to Python to avoid injection
     plesk ext firewall --list-json 2>/dev/null | \
-        python3 -c "import sys, json; rules = json.load(sys.stdin); print(next((r['id'] for r in rules if r['name'] == '${rule_name}'), ''))"
+        python3 -c "import sys, json; rule_name = sys.argv[1]; rules = json.load(sys.stdin); print(next((r['id'] for r in rules if r['name'] == rule_name), ''))" "$rule_name"
+}
+
+# Validate input fields
+validate_rule_name() {
+    local name="$1"
+    if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log "ERROR: Invalid rule name (only alphanumeric, underscore, dash allowed): $name"
+        return 1
+    fi
+    return 0
+}
+
+validate_direction() {
+    local direction="$1"
+    if [[ "$direction" != "input" ]] && [[ "$direction" != "output" ]]; then
+        log "ERROR: Invalid direction (must be 'input' or 'output'): $direction"
+        return 1
+    fi
+    return 0
+}
+
+validate_action() {
+    local action="$1"
+    if [[ "$action" != "allow" ]] && [[ "$action" != "deny" ]]; then
+        log "ERROR: Invalid action (must be 'allow' or 'deny'): $action"
+        return 1
+    fi
+    return 0
 }
 
 # Create or update Plesk firewall rule
@@ -116,36 +173,41 @@ update_plesk_rule() {
     local ip="$5"
     local comment="${6:-}"
 
+    # Validate inputs to prevent injection
+    validate_rule_name "$rule_name" || return 1
+    validate_direction "$direction" || return 1
+    validate_action "$action" || return 1
+
     log "Updating Plesk firewall rule: $rule_name for IP $ip"
 
     # Check if rule already exists
     local rule_id=$(get_rule_id "$rule_name")
 
-    # Build the command
-    local cmd="plesk ext firewall --set-rule"
+    # Build command array (safer than string concatenation)
+    local cmd_array=(plesk ext firewall --set-rule)
 
     if [[ -n "$rule_id" ]]; then
         # Update existing rule by ID
-        cmd="$cmd -id $rule_id"
+        cmd_array+=(-id "$rule_id")
         log "Updating existing rule (ID: $rule_id)"
     else
         # Create new rule by name
-        cmd="$cmd -name '$rule_name'"
+        cmd_array+=(-name "$rule_name")
         log "Creating new rule"
     fi
 
-    cmd="$cmd -direction $direction -action $action"
+    cmd_array+=(-direction "$direction" -action "$action")
 
     if [[ -n "$ports" ]]; then
-        cmd="$cmd -ports '$ports'"
+        cmd_array+=(-ports "$ports")
     fi
 
     if [[ -n "$ip" ]]; then
-        cmd="$cmd -remote-addresses '$ip'"
+        cmd_array+=(-remote-addresses "$ip")
     fi
 
-    # Execute command and capture output
-    local output=$(eval "$cmd" 2>&1)
+    # Execute command directly without eval (safer)
+    local output=$("${cmd_array[@]}" 2>&1)
     echo "$output" >> "$LOG_FILE"
 
     # Check if rule was created or updated successfully
