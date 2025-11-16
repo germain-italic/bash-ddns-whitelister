@@ -165,22 +165,20 @@ add_ufw_rule() {
     local from_ip="$3"
     local comment="$4"
 
-    # Build UFW add command
-    if [[ -n "$port" ]]; then
-        if [[ -n "$comment" ]]; then
-            ufw allow from "$from_ip" proto "$proto" to any port "$port" comment "$comment"
-        else
-            ufw allow from "$from_ip" proto "$proto" to any port "$port"
-        fi
-    else
-        if [[ -n "$comment" ]]; then
-            ufw allow from "$from_ip" comment "$comment"
-        else
-            ufw allow from "$from_ip"
-        fi
+    # Add identifier to comment
+    local full_comment="[bash-ddns-whitelister]"
+    if [[ -n "$comment" ]]; then
+        full_comment="[bash-ddns-whitelister] $comment"
     fi
 
-    log "Added UFW rule: from $from_ip proto $proto port $port (comment: $comment)"
+    # Build UFW add command
+    if [[ -n "$port" ]]; then
+        ufw allow from "$from_ip" proto "$proto" to any port "$port" comment "$full_comment"
+    else
+        ufw allow from "$from_ip" comment "$full_comment"
+    fi
+
+    log "Added UFW rule: from $from_ip proto $proto port $port (comment: $full_comment)"
 }
 
 # Main update function

@@ -206,6 +206,13 @@ update_plesk_rule() {
         cmd_array+=(-remote-addresses "$ip")
     fi
 
+    # Add comment to identify rules managed by bash-ddns-whitelister
+    local full_comment="[bash-ddns-whitelister]"
+    if [[ -n "$comment" ]]; then
+        full_comment="[bash-ddns-whitelister] $comment"
+    fi
+    cmd_array+=(-comment "$full_comment")
+
     # Execute command directly without eval (safer)
     local output=$("${cmd_array[@]}" 2>&1)
     echo "$output" >> "$LOG_FILE"
