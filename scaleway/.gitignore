@@ -1,0 +1,9 @@
+# Environment file contains API credentials
+.env
+
+# Cache directory
+.cache/
+
+# Log files
+*.log
+*.log.old
