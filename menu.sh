@@ -264,7 +264,8 @@ verification_menu() {
     print_option "3" "Test NAS blocking on all servers" "$BLUE"
     print_option "4" "Test connectivity from NAS" "$BLUE"
     print_option "5" "Check DNS resolution" "$BLUE"
-    print_option "6" "View deployment status" "$BLUE"
+    print_option "6" "Generate comprehensive server report (CSV)" "$GREEN"
+    print_option "7" "View deployment status" "$BLUE"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -278,7 +279,8 @@ verification_menu() {
         3) test_nas_blocking ;;
         4) test_connectivity ;;
         5) check_dns ;;
-        6) view_status ;;
+        6) generate_report ;;
+        7) view_status ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -983,6 +985,49 @@ check_dns() {
     verification_menu
 }
 
+# Generate comprehensive report
+generate_report() {
+    print_header
+    echo -e "${BOLD}${GREEN}Generate Comprehensive Server Report${NC}"
+    print_separator
+    echo
+    cd "${REPO_DIR}/utils"
+
+    if [ ! -f .env ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        wait_for_key
+        verification_menu
+        return
+    fi
+
+    echo -e "${CYAN}This will test all servers and generate a CSV report with:${NC}"
+    echo "  • SSH connectivity"
+    echo "  • Script installation status"
+    echo "  • Cron job status"
+    echo "  • SSH key deployment"
+    echo "  • NAS connectivity"
+    echo "  • Firewall status and policy"
+    echo "  • OS distribution and version"
+    echo "  • Security warnings"
+    echo
+    echo -e "${YELLOW}This may take a few minutes...${NC}"
+    echo
+
+    ./generate-report.sh
+
+    echo
+    echo -e "${GREEN}Report generated successfully!${NC}"
+    echo
+    echo "View the latest report with:"
+    echo "  ls -lt ${REPO_DIR}/reports/ | head -5"
+    echo
+    echo "Or view in columns:"
+    echo "  column -t -s',' \$(ls -t ${REPO_DIR}/reports/*.csv | head -1) | less -S"
+
+    wait_for_key
+    verification_menu
+}
+
 # View deployment status
 view_status() {
     print_header
@@ -990,10 +1035,16 @@ view_status() {
     print_separator
     echo
 
-    if [ -f "${REPO_DIR}/SERVEURS_SOURCES.md" ]; then
-        less "${REPO_DIR}/SERVEURS_SOURCES.md"
+    # Show latest report if available
+    latest_report=$(ls -t "${REPO_DIR}/reports"/*.csv 2>/dev/null | head -1)
+
+    if [ -n "$latest_report" ]; then
+        echo -e "${GREEN}Latest report: $(basename "$latest_report")${NC}"
+        echo
+        column -t -s',' "$latest_report" | less -S
     else
-        echo -e "${YELLOW}Status file not found${NC}"
+        echo -e "${YELLOW}No reports found${NC}"
+        echo "Generate a report first using option 6 in Verification & Testing menu"
     fi
 
     wait_for_key
