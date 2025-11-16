@@ -215,40 +215,29 @@ find_rules_by_identifier() {
     echo ""
 }
 
-# Create security group rules (TCP, UDP, ICMP)
+# Create security group rule (TCP only)
 create_security_group_rules() {
     local sg_id="$1"
     local ip="$2"
     local identifier="$3"
     local zone="${4:-fr-par-1}"
 
-    local protocols=("TCP" "UDP" "ICMP")
-    local rule_ids=()
-    local success=true
+    local rule_data="{\"action\":\"accept\",\"direction\":\"inbound\",\"ip_range\":\"${ip}/32\",\"protocol\":\"TCP\",\"editable\":true}"
 
-    for protocol in "${protocols[@]}"; do
-        local rule_data="{\"action\":\"accept\",\"direction\":\"inbound\",\"ip_range\":\"${ip}/32\",\"protocol\":\"${protocol}\",\"editable\":true}"
+    local response=$(scw_api_call "POST" "/security_groups/${sg_id}/rules" "$rule_data" "$zone")
 
-        local response=$(scw_api_call "POST" "/security_groups/${sg_id}/rules" "$rule_data" "$zone")
+    # Extract rule ID from response (format: {"rule": {"id": "xxx"}})
+    local rule_id=$(echo "$response" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"/\1/')
 
-        # Extract rule ID from response (format: {"rule": {"id": "xxx"}})
-        local rule_id=$(echo "$response" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"/\1/')
+    if [[ -n "$rule_id" ]]; then
+        log "Created TCP rule ID: ${rule_id} for ${identifier} (${ip}/32)"
 
-        if [[ -n "$rule_id" ]]; then
-            rule_ids+=("$rule_id")
-            log "Created ${protocol} rule ID: ${rule_id} for ${identifier} (${ip}/32)"
-        else
-            log "ERROR: Failed to create ${protocol} rule for ${identifier}"
-            success=false
-        fi
-    done
-
-    if $success; then
-        # Cache all rule IDs (comma separated)
+        # Cache rule ID
         local cache_key="${sg_id}_${identifier}_rule_ids"
-        printf '%s\n' "${rule_ids[@]}" | paste -sd ',' > "$CACHE_DIR/${cache_key}.cache"
+        echo "$rule_id" > "$CACHE_DIR/${cache_key}.cache"
         return 0
     else
+        log "ERROR: Failed to create TCP rule for ${identifier}"
         return 1
     fi
 }
