@@ -66,7 +66,7 @@ REPO_URL="https://github.com/germain-italic/bash-ddns-whitelister"
 
 if [ -d "${INSTALL_DIR}" ]; then
     echo "Directory exists, pulling latest changes..."
-    cd "${INSTALL_DIR}"
+    cd "${INSTALL_DIR}/ufw"
     git pull
 else
     echo "Cloning repository..."
@@ -81,7 +81,7 @@ echo -e "${YELLOW}Configuring .env...${NC}"
 ssh -p "${SSH_PORT}" "${SSH_USER}@${HOSTNAME}" bash << 'ENDSSH'
 set -e
 INSTALL_DIR="/root/bash-ufw-ddns"
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}/ufw"
 
 if [ ! -f ".env" ]; then
     echo "Creating .env from template..."
@@ -111,7 +111,7 @@ echo -e "${YELLOW}Configuring ufw_rules.conf...${NC}"
 ssh -p "${SSH_PORT}" "${SSH_USER}@${HOSTNAME}" bash << 'ENDSSH'
 set -e
 INSTALL_DIR="/root/bash-ufw-ddns"
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}/ufw"
 
 if [ ! -f "ufw_rules.conf" ]; then
     echo "Creating ufw_rules.conf..."
@@ -136,11 +136,11 @@ set -e
 INSTALL_DIR="/root/bash-ufw-ddns"
 
 # Check if cron job already exists
-if crontab -l 2>/dev/null | grep -q "${INSTALL_DIR}/update.sh"; then
+if crontab -l 2>/dev/null | grep -q "${INSTALL_DIR}/ufw/update.sh"; then
     echo "Cron job already exists, skipping"
 else
     echo "Adding cron job..."
-    (crontab -l 2>/dev/null || true; echo "*/5 * * * * ${INSTALL_DIR}/update.sh >> ${INSTALL_DIR}/cron.log 2>&1") | crontab -
+    (crontab -l 2>/dev/null || true; echo "*/5 * * * * ${INSTALL_DIR}/ufw/update.sh >> ${INSTALL_DIR}/ufw/cron.log 2>&1") | crontab -
 fi
 ENDSSH
 echo -e "${GREEN}✓ Cron job configured${NC}"
@@ -151,7 +151,7 @@ echo -e "${YELLOW}Running initial update...${NC}"
 ssh -p "${SSH_PORT}" "${SSH_USER}@${HOSTNAME}" bash << 'ENDSSH'
 set -e
 INSTALL_DIR="/root/bash-ufw-ddns"
-cd "${INSTALL_DIR}"
+cd "${INSTALL_DIR}/ufw"
 ./update.sh
 ENDSSH
 echo -e "${GREEN}✓ Initial update completed${NC}"
@@ -160,4 +160,4 @@ echo
 echo -e "${GREEN}=== Deployment completed successfully ===${NC}"
 echo
 echo "You can check the logs with:"
-echo "  ssh -p ${SSH_PORT} ${SSH_USER}@${HOSTNAME} 'tail -f ${INSTALL_DIR}/update.log'"
+echo "  ssh -p ${SSH_PORT} ${SSH_USER}@${HOSTNAME} 'tail -f ${INSTALL_DIR}/ufw/update.log'"
