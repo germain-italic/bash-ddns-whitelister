@@ -55,6 +55,71 @@ All three firewall implementations share a common architecture:
 - **deploy-ssh-keys.sh** - Deploys SSH keys to multiple servers for passwordless access
 - **test-nas-connectivity.sh** - Tests connectivity from NAS to all configured servers
 
+## Interactive Menu (menu.sh)
+
+The repository includes a comprehensive TUI menu system accessible via `./menu.sh`. All features are organized into 7 main categories:
+
+### Main Menu Structure
+
+**1. Deploy scripts to servers**
+- Deploy to iptables servers (prompts for hostname, port, user)
+- Deploy to Plesk servers (prompts for hostname, port, user)
+- Deploy to UFW servers (prompts for hostname, port, user)
+- Detect firewall types on all servers (runs utils/detect-firewall.sh)
+- Deploy SSH keys to servers (runs utils/deploy-ssh-keys.sh)
+
+**2. Uninstall scripts from servers**
+- Uninstall from all servers (runs utils/uninstall-all.sh with confirmation)
+- Uninstall from iptables servers (prompts for server details)
+- Uninstall from Plesk servers (prompts for server details)
+- Uninstall from UFW servers (prompts for server details)
+- Uninstall from specific server (guides through firewall type selection)
+
+**3. View Configuration**
+- View utils/.env (servers & SSH keys) - displays formatted server list
+- View iptables/.env (DNS settings) - shows DNS nameserver and log rotation
+- View plesk/.env (DNS settings) - shows DNS nameserver and log rotation
+- View ufw/.env (DNS settings) - shows DNS nameserver and log rotation
+- View all .env files summary - overview with existence checks
+
+**4. Utilities & Tools**
+- Detect firewall types on servers (runs utils/detect-firewall.sh)
+- Deploy SSH keys to servers (runs utils/deploy-ssh-keys.sh)
+- Test connectivity from NAS (runs utils/test-nas-connectivity.sh with user input)
+- Verify cron cleanup (runs utils/verify-cron-cleanup.sh)
+- Test NAS blocking on all servers (runs utils/test-nas-blocking.sh)
+
+**5. Firewall Management**
+- iptables - View configuration (.env.dist and dyndns_rules.conf.dist templates)
+- Plesk - View configuration (.env.dist and firewall_rules.conf.dist templates)
+- UFW - View configuration (.env.dist and ufw_rules.conf.dist templates)
+
+**6. Verification & Testing**
+- Verify cron cleanup on all servers (checks all servers for leftover crons)
+- Test NAS blocking on all servers (tests connectivity from NAS to each server)
+- Test connectivity from NAS (custom server list test)
+- Check DNS resolution (prompts for hostname, uses dig @1.1.1.1)
+- View deployment status (displays SERVEURS_SOURCES.md if available)
+
+**7. Documentation & Help**
+- View README (displays main README.md)
+- View CLAUDE.md (Architecture) (this file)
+- View iptables documentation (iptables/README.md)
+- View Plesk documentation (plesk/README.md)
+- View UFW documentation (ufw/README.md)
+- View security best practices (displays security guidelines inline)
+
+### Menu Usage
+
+```bash
+# Launch interactive menu
+./menu.sh
+
+# Menu is fully keyboard-driven, no mouse required
+# Navigate by entering option numbers
+# Press 0 to go back or exit
+```
+
 ## Common Commands
 
 ### Deployment Workflow
