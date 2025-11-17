@@ -173,20 +173,42 @@ ovh_api_call() {
 list_firewall_rules() {
     local ip_address="$1"
 
-    ovh_api_call "GET" "/ip/${ip_address}/firewall"
+    # OVH API: /ip/{ip}/firewall/{ipOnFirewall}/rule
+    ovh_api_call "GET" "/ip/${ip_address}/firewall/${ip_address}/rule"
 }
 
-# Find firewall rule by source IP
+# Get rule details by rule ID
+get_rule_details() {
+    local ip_address="$1"
+    local rule_id="$2"
+
+    ovh_api_call "GET" "/ip/${ip_address}/firewall/${ip_address}/rule/${rule_id}"
+}
+
+# Find firewall rule ID by source IP
 find_rule_by_source() {
     local ip_address="$1"
     local source_ip="$2"
 
-    # Get all rules
-    local rules=$(list_firewall_rules "$ip_address")
+    # Get all rule IDs
+    local rule_ids=$(list_firewall_rules "$ip_address")
 
-    # Parse JSON to find rule with matching source
-    # OVH returns array of rule IPs like: ["81.51.73.213"]
-    echo "$rules" | grep -o "\"${source_ip}\"" | head -1 | tr -d '"'
+    # Parse array like [1,2,3,4]
+    local ids=$(echo "$rule_ids" | tr -d '[]' | tr ',' ' ')
+
+    # Check each rule to find matching source (with or without /32)
+    for rule_id in $ids; do
+        local rule_details=$(get_rule_details "$ip_address" "$rule_id")
+        local rule_source=$(echo "$rule_details" | grep -o '"source":"[^"]*"' | cut -d'"' -f4)
+
+        # Match with or without CIDR notation
+        if [[ "$rule_source" == "$source_ip" ]] || [[ "$rule_source" == "${source_ip}/32" ]]; then
+            echo "$rule_id"
+            return 0
+        fi
+    done
+
+    echo ""
 }
 
 # Add firewall rule
@@ -195,15 +217,54 @@ add_firewall_rule() {
     local source_ip="$2"
     local identifier="$3"
 
-    local body="{\"action\":\"permit\",\"protocol\":\"tcp\",\"source\":\"${source_ip}\"}"
+    # Get existing rules to find the first available sequence number
+    local rule_ids=$(list_firewall_rules "$ip_address")
+    local ids=$(echo "$rule_ids" | tr -d '[]' | tr ',' ' ')
 
-    local response=$(ovh_api_call "POST" "/ip/${ip_address}/firewall" "$body")
+    # Collect used sequence numbers
+    local used_sequences=()
+    for rule_id in $ids; do
+        local rule_details=$(get_rule_details "$ip_address" "$rule_id")
+        local seq=$(echo "$rule_details" | grep -o '"sequence":[0-9]*' | cut -d':' -f2)
+        if [[ -n "$seq" ]]; then
+            used_sequences+=($seq)
+        fi
+    done
 
-    if [[ $? -eq 0 ]]; then
-        log "Created firewall rule for ${identifier} (${source_ip}) on ${ip_address}"
+    # Find first available sequence (0-19)
+    local next_sequence=-1
+    for seq in {0..19}; do
+        local found=0
+        for used in "${used_sequences[@]}"; do
+            if [[ $used -eq $seq ]]; then
+                found=1
+                break
+            fi
+        done
+        if [[ $found -eq 0 ]]; then
+            next_sequence=$seq
+            break
+        fi
+    done
+
+    # Check if we found an available slot
+    if [[ $next_sequence -eq -1 ]]; then
+        log "ERROR: No available sequence slots (firewall is full, 20/20 rules)"
+        return 1
+    fi
+
+    # OVH requires CIDR notation and sequence
+    local body="{\"action\":\"permit\",\"protocol\":\"tcp\",\"source\":\"${source_ip}/32\",\"sequence\":${next_sequence}}"
+
+    local response=$(ovh_api_call "POST" "/ip/${ip_address}/firewall/${ip_address}/rule" "$body")
+
+    # Check for errors in response
+    if echo "$response" | grep -q '"sequence"'; then
+        local rule_id=$(echo "$response" | grep -o '"sequence":[0-9]*' | cut -d':' -f2)
+        log "Created firewall rule ID ${rule_id} for ${identifier} (${source_ip}/32) on ${ip_address}"
         return 0
     else
-        log "ERROR: Failed to create firewall rule for ${identifier}"
+        log "ERROR: Failed to create firewall rule for ${identifier}: $response"
         return 1
     fi
 }
@@ -211,15 +272,15 @@ add_firewall_rule() {
 # Delete firewall rule
 delete_firewall_rule() {
     local ip_address="$1"
-    local source_ip="$2"
+    local rule_id="$2"
 
-    local response=$(ovh_api_call "DELETE" "/ip/${ip_address}/firewall/${source_ip}")
+    local response=$(ovh_api_call "DELETE" "/ip/${ip_address}/firewall/${ip_address}/rule/${rule_id}")
 
     if [[ $? -eq 0 ]]; then
-        log "Deleted firewall rule for ${source_ip} on ${ip_address}"
+        log "Deleted firewall rule ID ${rule_id} on ${ip_address}"
         return 0
     else
-        log "WARNING: Failed to delete firewall rule for ${source_ip}"
+        log "WARNING: Failed to delete firewall rule ID ${rule_id}"
         return 1
     fi
 }
@@ -233,18 +294,18 @@ update_firewall_rules() {
 
     # Delete old rule if exists
     if [[ -n "$old_ip" ]]; then
-        local old_rule=$(find_rule_by_source "$ip_address" "$old_ip")
-        if [[ -n "$old_rule" ]]; then
-            log "Found old rule for ${identifier} (${old_ip}), deleting..."
-            delete_firewall_rule "$ip_address" "$old_ip"
+        local old_rule_id=$(find_rule_by_source "$ip_address" "$old_ip")
+        if [[ -n "$old_rule_id" ]]; then
+            log "Found old rule ID ${old_rule_id} for ${identifier} (${old_ip}), deleting..."
+            delete_firewall_rule "$ip_address" "$old_rule_id"
         fi
     fi
 
     # Check if rule already exists for new IP
-    local existing_rule=$(find_rule_by_source "$ip_address" "$new_ip")
+    local existing_rule_id=$(find_rule_by_source "$ip_address" "$new_ip")
 
-    if [[ -n "$existing_rule" ]]; then
-        log "Rule already exists for ${identifier} (${new_ip}), reusing existing rule"
+    if [[ -n "$existing_rule_id" ]]; then
+        log "Rule ID ${existing_rule_id} already exists for ${identifier} (${new_ip}), reusing existing rule"
     else
         # Create new rule
         add_firewall_rule "$ip_address" "$new_ip" "$identifier"
