@@ -97,11 +97,12 @@ deployment_menu() {
     print_option "1" "Deploy to iptables servers" "$GREEN"
     print_option "2" "Deploy to Plesk servers" "$GREEN"
     print_option "3" "Deploy to UFW servers" "$GREEN"
-    print_option "4" "Deploy to Scaleway Security Groups" "$GREEN"
-    print_option "5" "Deploy to AWS Security Groups" "$GREEN"
-    print_option "6" "Deploy to OVH Edge Network Firewall" "$GREEN"
-    print_option "7" "Detect firewall types on all servers" "$CYAN"
-    print_option "8" "Deploy SSH keys to servers" "$CYAN"
+    print_option "4" "Deploy to Windows Firewall servers" "$GREEN"
+    print_option "5" "Deploy to Scaleway Security Groups" "$GREEN"
+    print_option "6" "Deploy to AWS Security Groups" "$GREEN"
+    print_option "7" "Deploy to OVH Edge Network Firewall" "$GREEN"
+    print_option "8" "Detect firewall types on all servers" "$CYAN"
+    print_option "9" "Deploy SSH keys to servers" "$CYAN"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -113,11 +114,12 @@ deployment_menu() {
         1) deploy_iptables ;;
         2) deploy_plesk ;;
         3) deploy_ufw ;;
-        4) deploy_scaleway ;;
-        5) deploy_aws ;;
-        6) deploy_ovh ;;
-        7) detect_firewalls ;;
-        8) deploy_ssh_keys ;;
+        4) deploy_windows ;;
+        5) deploy_scaleway ;;
+        6) deploy_aws ;;
+        7) deploy_ovh ;;
+        8) detect_firewalls ;;
+        9) deploy_ssh_keys ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -172,7 +174,8 @@ configuration_menu() {
     print_option "2" "View iptables/.env (DNS settings)" "$CYAN"
     print_option "3" "View plesk/.env (DNS settings)" "$CYAN"
     print_option "4" "View ufw/.env (DNS settings)" "$CYAN"
-    print_option "5" "View all .env files summary" "$GREEN"
+    print_option "5" "View windows/.env (DNS settings)" "$CYAN"
+    print_option "6" "View all .env files summary" "$GREEN"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -185,7 +188,8 @@ configuration_menu() {
         2) view_iptables_env ;;
         3) view_plesk_env ;;
         4) view_ufw_env ;;
-        5) view_all_env_summary ;;
+        5) view_windows_env ;;
+        6) view_all_env_summary ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -249,12 +253,13 @@ firewall_menu() {
     print_option "1" "iptables - View configuration" "$YELLOW"
     print_option "2" "Plesk - View configuration" "$YELLOW"
     print_option "3" "UFW - View configuration" "$YELLOW"
+    print_option "4" "Windows - View configuration" "$YELLOW"
     echo
     echo -e "${CYAN}Cloud Provider APIs:${NC}"
     echo
-    print_option "4" "Scaleway - View configuration" "$MAGENTA"
-    print_option "5" "AWS - View configuration" "$MAGENTA"
-    print_option "6" "OVH - View configuration" "$MAGENTA"
+    print_option "5" "Scaleway - View configuration" "$MAGENTA"
+    print_option "6" "AWS - View configuration" "$MAGENTA"
+    print_option "7" "OVH - View configuration" "$MAGENTA"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -266,9 +271,10 @@ firewall_menu() {
         1) show_iptables_config ;;
         2) show_plesk_config ;;
         3) show_ufw_config ;;
-        4) show_scaleway_config ;;
-        5) show_aws_config ;;
-        6) show_ovh_config ;;
+        4) show_windows_config ;;
+        5) show_scaleway_config ;;
+        6) show_aws_config ;;
+        7) show_ovh_config ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -529,6 +535,45 @@ view_ufw_env() {
     configuration_menu
 }
 
+# View windows/.env
+view_windows_env() {
+    print_header
+    echo -e "${BOLD}${CYAN}Windows Configuration (windows/.env)${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/windows/.env" ]; then
+        echo -e "${RED}ERROR: windows/.env not found${NC}"
+        echo
+        echo "This file should contain:"
+        echo "  • DNS_NAMESERVER (for hostname resolution)"
+        echo "  • LOG_ROTATION_HOURS (log retention)"
+        echo "  • Optional hostname references"
+        echo
+        echo "Create it from windows/.env.dist template"
+        wait_for_key
+        configuration_menu
+        return
+    fi
+
+    echo -e "${GREEN}DNS Configuration:${NC}"
+    grep "^DNS_NAMESERVER=" "${REPO_DIR}/windows/.env" 2>/dev/null || echo "  DNS_NAMESERVER: not set"
+    echo
+    echo -e "${GREEN}Log Settings:${NC}"
+    grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/windows/.env" 2>/dev/null || echo "  LOG_ROTATION_HOURS: not set"
+    echo
+    echo -e "${GREEN}Hostname References (optional):${NC}"
+    grep "HOSTNAME=" "${REPO_DIR}/windows/.env" 2>/dev/null | head -5 || echo "  (none defined)"
+    echo
+    echo -e "${CYAN}Full file content:${NC}"
+    echo "────────────────────────────────────────────────────────────────────"
+    cat "${REPO_DIR}/windows/.env"
+    echo "────────────────────────────────────────────────────────────────────"
+
+    wait_for_key
+    configuration_menu
+}
+
 # View all .env summary
 view_all_env_summary() {
     print_header
@@ -691,6 +736,37 @@ deploy_ufw() {
     echo
     echo -e "${CYAN}Deploying to ${hostname}:${port} as ${user}...${NC}"
     cd "${REPO_DIR}/ufw"
+    ./deploy.sh "$hostname" "$port" "$user"
+
+    wait_for_key
+    deployment_menu
+}
+
+# Deploy to Windows Firewall servers
+deploy_windows() {
+    print_header
+    echo -e "${BOLD}${GREEN}Deploy to Windows Firewall Servers${NC}"
+    print_separator
+    echo
+    echo "Enter server hostname (or press Enter to cancel):"
+    read hostname
+
+    if [ -z "$hostname" ]; then
+        deployment_menu
+        return
+    fi
+
+    echo "Enter SSH port [default: 22]:"
+    read port
+    port=${port:-22}
+
+    echo "Enter SSH user [default: Administrator]:"
+    read user
+    user=${user:-Administrator}
+
+    echo
+    echo -e "${CYAN}Deploying to ${hostname}:${port} as ${user}...${NC}"
+    cd "${REPO_DIR}/windows"
     ./deploy.sh "$hostname" "$port" "$user"
 
     wait_for_key
@@ -1251,6 +1327,36 @@ show_ufw_config() {
 
     wait_for_key
     show_ufw_config
+}
+
+# Show Windows Firewall config
+show_windows_config() {
+    print_header
+    echo -e "${BOLD}${YELLOW}Windows Firewall Configuration${NC}"
+    print_separator
+    echo
+    echo "Template files:"
+    echo "  - ${REPO_DIR}/windows/.env.dist"
+    echo "  - ${REPO_DIR}/windows/firewall_rules.conf.dist"
+    echo
+    echo "View:"
+    echo "  1. .env.dist template"
+    echo "  2. firewall_rules.conf.dist template"
+    echo "  3. update.ps1 PowerShell script"
+    echo "  0. Back"
+    echo
+    echo -n "Choice: "
+    read choice
+
+    case $choice in
+        1) less "${REPO_DIR}/windows/.env.dist" ;;
+        2) less "${REPO_DIR}/windows/firewall_rules.conf.dist" ;;
+        3) less "${REPO_DIR}/windows/update.ps1" ;;
+        0) firewall_menu ; return ;;
+    esac
+
+    wait_for_key
+    show_windows_config
 }
 
 # View README

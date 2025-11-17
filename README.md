@@ -11,6 +11,7 @@ bash-ddns-whitelister/
 ├── iptables/          # For iptables-based firewalls
 ├── plesk/             # For Plesk Firewall
 ├── ufw/               # For UFW (Uncomplicated Firewall)
+├── windows/           # For Windows Firewall (Server 2022)
 ├── scaleway/          # For Scaleway Security Groups API
 ├── aws/               # For AWS Security Groups API
 ├── ovhcloud/          # For OVH Edge Network Firewall API
@@ -84,6 +85,12 @@ cd ufw
 ./deploy.sh server.example.com 22 root
 ```
 
+**For Windows servers:**
+```bash
+cd windows
+./deploy.sh server.example.com 22 Administrator
+```
+
 #### 4. Test Connectivity
 
 Test that your NAS can connect to all servers (run this FROM the NAS):
@@ -100,6 +107,7 @@ Each subdirectory contains its own README with specific instructions:
 - [iptables/README.md](iptables/README.md) - For iptables-based firewalls
 - [plesk/README.md](plesk/README.md) - For Plesk Firewall
 - [ufw/README.md](ufw/README.md) - For UFW firewalls
+- [windows/README.md](windows/README.md) - For Windows Firewall (Server 2022)
 - [utils/README.md](utils/README.md) - Utility scripts documentation
 
 ## 🔧 How It Works
@@ -193,6 +201,10 @@ cd ../utils
 | **iptables** | `/iptables` | Standard Linux iptables firewall |
 | **Plesk** | `/plesk` | Plesk Firewall (GUI-based) |
 | **UFW** | `/ufw` | Uncomplicated Firewall (Ubuntu/Debian) |
+| **Windows** | `/windows` | Windows Firewall (Server 2022 Standard) |
+| **Scaleway** | `/scaleway` | Scaleway Security Groups API |
+| **AWS** | `/aws` | AWS Security Groups API |
+| **OVH** | `/ovhcloud` | OVH Edge Network Firewall API |
 
 ## 🐛 Troubleshooting
 

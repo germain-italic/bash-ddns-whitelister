@@ -1,0 +1,30 @@
+# Windows Firewall Rules Configuration
+# Format: RULE_NAME|DIRECTION|ACTION|PROTOCOL|PORT|HOSTNAME|COMMENT
+#
+# RULE_NAME:  Unique name for the firewall rule (no spaces recommended)
+# DIRECTION:  Inbound or Outbound
+# ACTION:     Allow or Block
+# PROTOCOL:   TCP, UDP, or Any (leave empty for any)
+# PORT:       Port number (leave empty for any port)
+# HOSTNAME:   Dynamic DNS hostname to resolve
+# COMMENT:    Description of the rule (optional)
+#
+# Examples:
+
+# Allow SSH from NAS
+# AllowSSHFromNAS|Inbound|Allow|TCP|22|nas.example.com|SSH access from NAS
+
+# Allow RDP from office
+# AllowRDPFromOffice|Inbound|Allow|TCP|3389|office.example.com|RDP access from office
+
+# Allow HTTPS from backup server
+# AllowHTTPSFromBackup|Inbound|Allow|TCP|443|backup.example.com|HTTPS from backup server
+
+# Allow SMB from NAS
+# AllowSMBFromNAS|Inbound|Allow|TCP|445|nas.example.com|SMB file sharing from NAS
+
+# Allow all traffic from trusted host
+# AllowAllFromTrusted|Inbound|Allow||||trusted.example.com|Allow all from trusted host
+
+# Block outbound to specific host
+# BlockOutboundToHost|Outbound|Block|||blocked.example.com|Block traffic to specific host

@@ -12,6 +12,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
@@ -28,6 +29,7 @@ source "$ENV_FILE"
 UFW_COUNT=0
 PLESK_COUNT=0
 IPTABLES_COUNT=0
+WINDOWS_COUNT=0
 NONE_COUNT=0
 FAILED_COUNT=0
 
@@ -35,6 +37,7 @@ FAILED_COUNT=0
 declare -a UFW_SERVERS
 declare -a PLESK_SERVERS
 declare -a IPTABLES_SERVERS
+declare -a WINDOWS_SERVERS
 declare -a NONE_SERVERS
 declare -a FAILED_SERVERS
 
@@ -65,11 +68,17 @@ detect_firewall() {
     fi
 
     # Detect firewall type
-    # Priority: 1. Plesk Firewall, 2. UFW, 3. iptables, 4. none
+    # Priority: 1. Windows Firewall, 2. Plesk Firewall, 3. UFW, 4. iptables, 5. none
     local firewall_type="none"
 
-    # Check for Plesk Firewall first (not just Plesk, but the Firewall module)
-    if ssh $SSH_OPTS -p "$port" "${user}@${hostname}" "command -v plesk > /dev/null 2>&1 && plesk ext firewall --help > /dev/null 2>&1" 2>/dev/null; then
+    # Check for Windows Firewall first (PowerShell)
+    if ssh $SSH_OPTS -p "$port" "${user}@${hostname}" "powershell -Command \"Get-NetFirewallProfile | Select-Object -First 1\" 2>/dev/null | grep -q Name" 2>/dev/null; then
+        firewall_type="windows"
+        echo -e "  ${MAGENTA}Firewall: Windows Firewall${NC}"
+        WINDOWS_COUNT=$((WINDOWS_COUNT + 1))
+        WINDOWS_SERVERS+=("${hostname}:${port}:${user}")
+    # Check for Plesk Firewall (not just Plesk, but the Firewall module)
+    elif ssh $SSH_OPTS -p "$port" "${user}@${hostname}" "command -v plesk > /dev/null 2>&1 && plesk ext firewall --help > /dev/null 2>&1" 2>/dev/null; then
         firewall_type="plesk"
         echo -e "  ${CYAN}Firewall: Plesk Firewall${NC}"
         PLESK_COUNT=$((PLESK_COUNT + 1))
@@ -125,14 +134,23 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║                 Detection Summary                      ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════╝${NC}"
 echo
-echo -e "Total servers checked: $((UFW_COUNT + PLESK_COUNT + IPTABLES_COUNT + NONE_COUNT + FAILED_COUNT))"
+echo -e "Total servers checked: $((UFW_COUNT + PLESK_COUNT + IPTABLES_COUNT + WINDOWS_COUNT + NONE_COUNT + FAILED_COUNT))"
 echo
+echo -e "${MAGENTA}Windows Firewall:${WINDOWS_COUNT}${NC}"
 echo -e "${CYAN}Plesk Firewall:  ${PLESK_COUNT}${NC}"
 echo -e "${GREEN}UFW:             ${UFW_COUNT}${NC}"
 echo -e "${GREEN}iptables:        ${IPTABLES_COUNT}${NC}"
 echo -e "${YELLOW}None/Unknown:    ${NONE_COUNT}${NC}"
 echo -e "${RED}Failed:          ${FAILED_COUNT}${NC}"
 echo
+
+if [ ${#WINDOWS_SERVERS[@]} -gt 0 ]; then
+    echo -e "${MAGENTA}Windows Firewall servers:${NC}"
+    for server in "${WINDOWS_SERVERS[@]}"; do
+        echo -e "  ${MAGENTA}•${NC} $server"
+    done
+    echo
+fi
 
 if [ ${#PLESK_SERVERS[@]} -gt 0 ]; then
     echo -e "${CYAN}Plesk Firewall servers:${NC}"
