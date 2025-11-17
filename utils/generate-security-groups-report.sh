@@ -141,8 +141,23 @@ if [[ -f "$AWS_ENV" ]]; then
     source "$AWS_ENV"
 
     if [[ -n "$AWS_ACCESS_KEY_ID" ]] && [[ -n "$AWS_SECRET_ACCESS_KEY" ]]; then
-        # List regions to check
-        REGIONS=("us-east-1" "us-west-2" "eu-west-1" "ap-southeast-1")
+        # Extract unique regions from AWS_RULES or use AWS_DEFAULT_REGION
+        declare -a REGIONS
+        if [[ ${#AWS_RULES[@]} -gt 0 ]]; then
+            # Extract regions from AWS_RULES (4th field)
+            for rule_config in "${AWS_RULES[@]}"; do
+                IFS='|' read -ra PARTS <<< "$rule_config"
+                region="${PARTS[3]:-}"
+                if [[ -n "$region" ]] && [[ ! " ${REGIONS[@]} " =~ " ${region} " ]]; then
+                    REGIONS+=("$region")
+                fi
+            done
+        else
+            # Fallback to AWS_DEFAULT_REGION if no rules configured
+            REGIONS=("${AWS_DEFAULT_REGION:-us-east-1}")
+        fi
+
+        echo -e "  ${CYAN}Scanning regions: ${REGIONS[*]}${NC}"
 
         for region in "${REGIONS[@]}"; do
             # Get security groups (using AWS CLI if available)
