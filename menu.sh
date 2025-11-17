@@ -206,6 +206,11 @@ utilities_menu() {
     print_option "3" "Test connectivity from NAS" "$CYAN"
     print_option "4" "Verify cron cleanup" "$CYAN"
     print_option "5" "Test NAS blocking on all servers" "$CYAN"
+    print_option "6" "Clean old cron entries from servers" "$CYAN"
+    print_option "7" "Update repos on all servers" "$CYAN"
+    print_option "8" "Redeploy to all servers" "$CYAN"
+    print_option "9" "Deploy to missing servers" "$CYAN"
+    print_option "10" "Generate deployment report (CSV)" "$GREEN"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -219,6 +224,11 @@ utilities_menu() {
         3) test_connectivity ;;
         4) verify_cron ;;
         5) test_nas_blocking ;;
+        6) clean_old_crons ;;
+        7) update_all_repos ;;
+        8) redeploy_all ;;
+        9) deploy_missing ;;
+        10) generate_report ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -234,11 +244,17 @@ firewall_menu() {
     echo -e "${BOLD}${YELLOW}Firewall Management${NC}"
     print_separator
     echo
-    echo -e "${CYAN}Choose firewall type:${NC}"
+    echo -e "${CYAN}Server-level Firewalls:${NC}"
     echo
     print_option "1" "iptables - View configuration" "$YELLOW"
     print_option "2" "Plesk - View configuration" "$YELLOW"
     print_option "3" "UFW - View configuration" "$YELLOW"
+    echo
+    echo -e "${CYAN}Cloud Provider APIs:${NC}"
+    echo
+    print_option "4" "Scaleway - View configuration" "$MAGENTA"
+    print_option "5" "AWS - View configuration" "$MAGENTA"
+    print_option "6" "OVH - View configuration" "$MAGENTA"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -250,6 +266,9 @@ firewall_menu() {
         1) show_iptables_config ;;
         2) show_plesk_config ;;
         3) show_ufw_config ;;
+        4) show_scaleway_config ;;
+        5) show_aws_config ;;
+        6) show_ovh_config ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -1320,6 +1339,242 @@ view_security_docs() {
     echo
     wait_for_key
     documentation_menu
+}
+
+# Clean old cron entries
+clean_old_crons() {
+    print_header
+    echo -e "${BOLD}${CYAN}Clean Old Cron Entries${NC}"
+    print_separator
+    echo
+    cd "${REPO_DIR}/utils"
+
+    if [ ! -f .env ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        wait_for_key
+        utilities_menu
+        return
+    fi
+
+    ./clean-old-crons.sh
+
+    wait_for_key
+    utilities_menu
+}
+
+# Update all repos
+update_all_repos() {
+    print_header
+    echo -e "${BOLD}${CYAN}Update Repos on All Servers${NC}"
+    print_separator
+    echo
+    cd "${REPO_DIR}/utils"
+
+    if [ ! -f .env ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        wait_for_key
+        utilities_menu
+        return
+    fi
+
+    ./update-all-repos.sh
+
+    wait_for_key
+    utilities_menu
+}
+
+# Redeploy to all servers
+redeploy_all() {
+    print_header
+    echo -e "${BOLD}${CYAN}Redeploy to All Servers${NC}"
+    print_separator
+    echo
+    echo -e "${YELLOW}WARNING: This will redeploy firewall scripts to ALL configured servers${NC}"
+    echo
+    echo -n "Are you sure? (y/N): "
+    read confirm
+
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Cancelled"
+        wait_for_key
+        utilities_menu
+        return
+    fi
+
+    cd "${REPO_DIR}/utils"
+
+    if [ ! -f .env ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        wait_for_key
+        utilities_menu
+        return
+    fi
+
+    ./redeploy-all.sh
+
+    wait_for_key
+    utilities_menu
+}
+
+# Deploy to missing servers
+deploy_missing() {
+    print_header
+    echo -e "${BOLD}${CYAN}Deploy to Missing Servers${NC}"
+    print_separator
+    echo
+    cd "${REPO_DIR}/utils"
+
+    if [ ! -f .env ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        wait_for_key
+        utilities_menu
+        return
+    fi
+
+    ./deploy-missing-repos.sh
+
+    wait_for_key
+    utilities_menu
+}
+
+# Generate deployment report
+generate_report() {
+    print_header
+    echo -e "${BOLD}${GREEN}Generate Deployment Report${NC}"
+    print_separator
+    echo
+    cd "${REPO_DIR}/utils"
+
+    if [ ! -f .env ]; then
+        echo -e "${RED}ERROR: utils/.env not found${NC}"
+        wait_for_key
+        utilities_menu
+        return
+    fi
+
+    ./generate-report.sh
+
+    wait_for_key
+    utilities_menu
+}
+
+# Show Scaleway config
+show_scaleway_config() {
+    print_header
+    echo -e "${BOLD}${MAGENTA}Scaleway Security Groups Configuration${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/scaleway/.env" ]; then
+        echo -e "${RED}ERROR: scaleway/.env not found${NC}"
+        echo
+        echo "This file should contain:"
+        echo "  • SCALEWAY_API_KEY - API access key"
+        echo "  • SCALEWAY_ZONE - Zone (e.g., fr-par-1)"
+        echo "  • SCALEWAY_SECURITY_GROUP_ID - Security group UUID"
+        echo "  • LOG_ROTATION_HOURS - Log retention"
+        echo
+        echo "Create it from scaleway/.env.dist template"
+        wait_for_key
+        firewall_menu
+        return
+    fi
+
+    echo -e "${GREEN}Scaleway Configuration:${NC}"
+    echo
+    grep "^SCALEWAY_" "${REPO_DIR}/scaleway/.env" 2>/dev/null | sed 's/SCALEWAY_API_KEY=.*/SCALEWAY_API_KEY=***HIDDEN***/' || echo "  No configuration found"
+    echo
+    grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/scaleway/.env" 2>/dev/null || echo "  LOG_ROTATION_HOURS: not set"
+    echo
+
+    if [ -f "${REPO_DIR}/scaleway/security_group_rules.conf" ]; then
+        echo -e "${GREEN}Rules Configuration:${NC}"
+        echo "  File: scaleway/security_group_rules.conf"
+        echo "  Rules: $(grep -v '^#' "${REPO_DIR}/scaleway/security_group_rules.conf" | grep -v '^$' | wc -l)"
+    fi
+
+    wait_for_key
+    firewall_menu
+}
+
+# Show AWS config
+show_aws_config() {
+    print_header
+    echo -e "${BOLD}${MAGENTA}AWS Security Groups Configuration${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/aws/.env" ]; then
+        echo -e "${RED}ERROR: aws/.env not found${NC}"
+        echo
+        echo "This file should contain:"
+        echo "  • AWS_REGION - AWS region (e.g., ap-east-1)"
+        echo "  • AWS_SECURITY_GROUP_ID - Security group ID"
+        echo "  • LOG_ROTATION_HOURS - Log retention"
+        echo
+        echo "AWS credentials should be in ~/.aws/credentials"
+        echo "Create .env from aws/.env.dist template"
+        wait_for_key
+        firewall_menu
+        return
+    fi
+
+    echo -e "${GREEN}AWS Configuration:${NC}"
+    echo
+    grep "^AWS_" "${REPO_DIR}/aws/.env" 2>/dev/null || echo "  No configuration found"
+    echo
+    grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/aws/.env" 2>/dev/null || echo "  LOG_ROTATION_HOURS: not set"
+    echo
+
+    if [ -f "${REPO_DIR}/aws/security_group_rules.conf" ]; then
+        echo -e "${GREEN}Rules Configuration:${NC}"
+        echo "  File: aws/security_group_rules.conf"
+        echo "  Rules: $(grep -v '^#' "${REPO_DIR}/aws/security_group_rules.conf" | grep -v '^$' | wc -l)"
+    fi
+
+    wait_for_key
+    firewall_menu
+}
+
+# Show OVH config
+show_ovh_config() {
+    print_header
+    echo -e "${BOLD}${MAGENTA}OVH Edge Network Firewall Configuration${NC}"
+    print_separator
+    echo
+
+    if [ ! -f "${REPO_DIR}/ovhcloud/.env" ]; then
+        echo -e "${RED}ERROR: ovhcloud/.env not found${NC}"
+        echo
+        echo "This file should contain:"
+        echo "  • OVH_ENDPOINT - API endpoint (e.g., ovh-eu)"
+        echo "  • OVH_APPLICATION_KEY - Application key"
+        echo "  • OVH_APPLICATION_SECRET - Application secret"
+        echo "  • OVH_CONSUMER_KEY - Consumer key"
+        echo "  • OVH_SERVICE_NAME - Service name (IP address)"
+        echo "  • LOG_ROTATION_HOURS - Log retention"
+        echo
+        echo "Create it from ovhcloud/.env.dist template"
+        wait_for_key
+        firewall_menu
+        return
+    fi
+
+    echo -e "${GREEN}OVH Configuration:${NC}"
+    echo
+    grep "^OVH_" "${REPO_DIR}/ovhcloud/.env" 2>/dev/null | sed 's/OVH_APPLICATION_SECRET=.*/OVH_APPLICATION_SECRET=***HIDDEN***/' | sed 's/OVH_CONSUMER_KEY=.*/OVH_CONSUMER_KEY=***HIDDEN***/' || echo "  No configuration found"
+    echo
+    grep "^LOG_ROTATION_HOURS=" "${REPO_DIR}/ovhcloud/.env" 2>/dev/null || echo "  LOG_ROTATION_HOURS: not set"
+    echo
+
+    if [ -f "${REPO_DIR}/ovhcloud/firewall_rules.conf" ]; then
+        echo -e "${GREEN}Rules Configuration:${NC}"
+        echo "  File: ovhcloud/firewall_rules.conf"
+        echo "  Rules: $(grep -v '^#' "${REPO_DIR}/ovhcloud/firewall_rules.conf" | grep -v '^$' | wc -l)"
+    fi
+
+    wait_for_key
+    firewall_menu
 }
 
 # ============================================================================
