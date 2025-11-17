@@ -36,8 +36,31 @@ This tool automatically updates Windows Firewall rules when IP addresses of dyna
    ```
 
 2. **Configure SSH for key-based authentication**:
-   - Deploy your SSH public key to `C:\Users\Administrator\.ssh\authorized_keys`
-   - Or use the utility: `utils/deploy-ssh-keys.sh`
+
+   **IMPORTANT**: For Administrator accounts, SSH keys must be placed in a special location:
+
+   ```powershell
+   # Create the directory if it doesn't exist
+   New-Item -ItemType Directory -Force -Path C:\ProgramData\ssh
+
+   # Copy your public key content to this file
+   # (replace the content below with your actual public key)
+   Set-Content -Path C:\ProgramData\ssh\administrators_authorized_keys -Value "ssh-rsa AAAAB3Nza..."
+
+   # Set correct permissions (CRITICAL - SSH won't work without this)
+   icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r
+   icacls C:\ProgramData\ssh\administrators_authorized_keys /grant SYSTEM:`(F`)
+   icacls C:\ProgramData\ssh\administrators_authorized_keys /grant BUILTIN\Administrators:`(F`)
+   ```
+
+   **Note**: For non-Administrator users, use `C:\Users\USERNAME\.ssh\authorized_keys` instead.
+
+   Alternatively, use the utility script from Linux/WSL:
+   ```bash
+   # From your Linux/WSL machine
+   cd utils
+   ./deploy-ssh-keys.sh
+   ```
 
 ### Deployment from Linux/WSL
 
@@ -239,9 +262,31 @@ powershell -ExecutionPolicy Bypass -File update.ps1
    Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP"
    ```
 
-3. **Verify SSH keys are deployed**:
+3. **Verify SSH keys are deployed in the CORRECT location**:
+
+   **For Administrator accounts** (IMPORTANT):
    ```powershell
-   Get-Content C:\Users\Administrator\.ssh\authorized_keys
+   # SSH keys MUST be in this location for Administrator
+   Get-Content C:\ProgramData\ssh\administrators_authorized_keys
+
+   # Verify permissions are correct
+   icacls C:\ProgramData\ssh\administrators_authorized_keys
+   # Should show: SYSTEM:(F) and BUILTIN\Administrators:(F) ONLY
+   ```
+
+   **For non-Administrator users**:
+   ```powershell
+   Get-Content C:\Users\USERNAME\.ssh\authorized_keys
+   ```
+
+4. **Fix Administrator SSH key permissions** (if needed):
+   ```powershell
+   icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r
+   icacls C:\ProgramData\ssh\administrators_authorized_keys /grant SYSTEM:`(F`)
+   icacls C:\ProgramData\ssh\administrators_authorized_keys /grant BUILTIN\Administrators:`(F`)
+
+   # Restart SSH service after fixing permissions
+   Restart-Service sshd
    ```
 
 ## Security Notes
