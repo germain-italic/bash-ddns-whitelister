@@ -193,7 +193,7 @@ OVH_RULES=(
 ```bash
 OVH_RULES=(
     "203.0.113.10|nas1|nas.example.com"
-    "54.38.123.45|backup|backup.example.com"
+    "203.0.113.20|backup|backup.example.com"
 )
 ```
 
