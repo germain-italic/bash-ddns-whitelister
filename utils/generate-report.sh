@@ -103,12 +103,10 @@ check_cron() {
     local user="$3"
     local fw_type="$4"
 
-    local pattern=""
     case "$fw_type" in
-        iptables|plesk|ufw) pattern="bash-ddns-whitelister" ;;
         windows)
             # Check for Windows scheduled task
-            if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "powershell -Command \"Get-ScheduledTask -TaskName 'WindowsFirewallDDNS' -ErrorAction SilentlyContinue\" 2>/dev/null" 2>/dev/null | grep -q "WindowsFirewallDDNS"; then
+            if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "powershell -Command \"Get-ScheduledTask -TaskName 'WindowsFirewallDDNS' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TaskName\" 2>/dev/null" 2>/dev/null | grep -q "WindowsFirewallDDNS"; then
                 echo "YES"
             else
                 echo "NO"
@@ -116,14 +114,16 @@ check_cron() {
             return
             ;;
         none) echo "N/A"; return ;;
+        iptables|plesk|ufw)
+            # Check ONLY for new unified repo (bash-ddns-whitelister)
+            if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "crontab -l 2>/dev/null | grep -q 'bash-ddns-whitelister'" 2>/dev/null; then
+                echo "YES"
+            else
+                echo "NO"
+            fi
+            ;;
         *) echo "N/A"; return ;;
     esac
-
-    if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "crontab -l 2>/dev/null | grep -q '$pattern'" 2>/dev/null; then
-        echo "YES"
-    else
-        echo "NO"
-    fi
 }
 
 # Function to check if SSH key is deployed
@@ -166,14 +166,30 @@ get_os_info() {
     local host="$1"
     local port="$2"
     local user="$3"
-    
-    local os_info=$(ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" \
-        "if [ -f /etc/os-release ]; then . /etc/os-release; echo \"\$NAME|\$VERSION_ID\"; else echo 'Unknown|Unknown'; fi" 2>/dev/null)
-    
-    if [[ -n "$os_info" ]]; then
-        echo "$os_info"
+    local fw_type="$4"
+
+    # For Windows, use PowerShell to get OS info
+    if [[ "$fw_type" == "windows" ]]; then
+        local os_info=$(ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" \
+            "powershell -Command \"Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Caption\" 2>/dev/null; powershell -Command \"Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Version\" 2>/dev/null" 2>/dev/null)
+
+        if [[ -n "$os_info" ]]; then
+            local os_name=$(echo "$os_info" | head -1 | sed 's/Microsoft //')
+            local os_version=$(echo "$os_info" | tail -1)
+            echo "${os_name}|${os_version}"
+        else
+            echo "Windows|Unknown"
+        fi
     else
-        echo "Unknown|Unknown"
+        # For Linux, use /etc/os-release
+        local os_info=$(ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" \
+            "if [ -f /etc/os-release ]; then . /etc/os-release; echo \"\$NAME|\$VERSION_ID\"; else echo 'Unknown|Unknown'; fi" 2>/dev/null)
+
+        if [[ -n "$os_info" ]]; then
+            echo "$os_info"
+        else
+            echo "Unknown|Unknown"
+        fi
     fi
 }
 
@@ -207,16 +223,27 @@ check_firewall_status() {
         ufw)
             local status=$(ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" \
                 "ufw status 2>/dev/null | head -1" 2>/dev/null)
-            
+
             if [[ "$status" =~ "Status: active" ]]; then
                 local policy=$(ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" \
                     "ufw status verbose 2>/dev/null | grep 'Default:' | head -1" 2>/dev/null)
-                
+
                 if [[ "$policy" =~ "deny (incoming)" ]]; then
                     echo "ACTIVE|DENY"
                 else
                     echo "ACTIVE|UNKNOWN"
                 fi
+            else
+                echo "INACTIVE|N/A"
+            fi
+            ;;
+        windows)
+            # Check Windows Firewall status
+            local fw_status=$(ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" \
+                "powershell -Command \"Get-NetFirewallProfile -Profile Domain,Public,Private | Where-Object { \\\$_.Enabled -eq 'True' } | Select-Object -ExpandProperty Name\" 2>/dev/null" 2>/dev/null)
+
+            if [[ -n "$fw_status" ]]; then
+                echo "ACTIVE|Enabled"
             else
                 echo "INACTIVE|N/A"
             fi
@@ -316,7 +343,7 @@ for server_config in "${SERVERS[@]}"; do
         nas_blocked="N/A"
     fi
     
-    os_info=$(get_os_info "$hostname" "$port" "$user")
+    os_info=$(get_os_info "$hostname" "$port" "$user" "$firewall_type")
     IFS='|' read -r os_distro os_version <<< "$os_info"
     
     fw_status=$(check_firewall_status "$hostname" "$port" "$user" "$firewall_type")

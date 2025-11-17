@@ -61,14 +61,14 @@ echo -e "${MAGENTA}Checking Scaleway Security Groups...${NC}"
 if [[ -f "$SCALEWAY_ENV" ]]; then
     source "$SCALEWAY_ENV"
 
-    if [[ -n "$SCALEWAY_SECRET_KEY" ]] && [[ -n "$SCALEWAY_ORGANIZATION_ID" ]]; then
+    if [[ -n "$SCW_SECRET_KEY" ]] && [[ -n "$SCW_DEFAULT_ORGANIZATION_ID" ]]; then
         # List all zones to check
         ZONES=("fr-par-1" "fr-par-2" "fr-par-3" "nl-ams-1" "nl-ams-2" "pl-waw-1" "pl-waw-2")
 
         for zone in "${ZONES[@]}"; do
             # Get security groups for this zone
             sg_response=$(curl -s -X GET \
-                -H "X-Auth-Token: $SCALEWAY_SECRET_KEY" \
+                -H "X-Auth-Token: $SCW_SECRET_KEY" \
                 "https://api.scaleway.com/instance/v1/zones/${zone}/security_groups")
 
             # Parse security groups
@@ -81,7 +81,7 @@ if [[ -f "$SCALEWAY_ENV" ]]; then
 
                     # Get servers using this security group
                     servers_response=$(curl -s -X GET \
-                        -H "X-Auth-Token: $SCALEWAY_SECRET_KEY" \
+                        -H "X-Auth-Token: $SCW_SECRET_KEY" \
                         "https://api.scaleway.com/instance/v1/zones/${zone}/servers")
 
                     # Find servers with this security group
@@ -103,7 +103,7 @@ if [[ -f "$SCALEWAY_ENV" ]]; then
 
                     # Get DDNS rules count from security group rules
                     rules_response=$(curl -s -X GET \
-                        -H "X-Auth-Token: $SCALEWAY_SECRET_KEY" \
+                        -H "X-Auth-Token: $SCW_SECRET_KEY" \
                         "https://api.scaleway.com/instance/v1/zones/${zone}/security_groups/${sg_id}/rules")
 
                     rules_count=$(echo "$rules_response" | jq -r '.rules | length' 2>/dev/null || echo "0")
@@ -213,23 +213,49 @@ fi
 
 echo -e "${MAGENTA}Checking OVH Edge Network Firewall...${NC}"
 
+# OVH API call with authentication
+ovh_api_call() {
+    local method="$1"
+    local endpoint="$2"
+    local body="${3:-}"
+
+    local url="https://eu.api.ovh.com/1.0${endpoint}"
+    local timestamp=$(date +%s)
+
+    # Calculate signature
+    # Signature = "$1$" + SHA1_HEX(AS+"+"+CK+"+"+METHOD+"+"+QUERY+"+"+BODY+"+"+TSTAMP)
+    local signature_data="${OVH_APPLICATION_SECRET}+${OVH_CONSUMER_KEY}+${method}+${url}+${body}+${timestamp}"
+    local signature=$(echo -n "$signature_data" | sha1sum | awk '{print $1}')
+    local full_signature="\$1\$${signature}"
+
+    # Make API call
+    curl -s -X "$method" \
+        -H "X-Ovh-Application: ${OVH_APPLICATION_KEY}" \
+        -H "X-Ovh-Consumer: ${OVH_CONSUMER_KEY}" \
+        -H "X-Ovh-Timestamp: ${timestamp}" \
+        -H "X-Ovh-Signature: ${full_signature}" \
+        "$url"
+}
+
 if [[ -f "$OVH_ENV" ]]; then
     source "$OVH_ENV"
 
-    if [[ -n "$OVH_APPLICATION_KEY" ]] && [[ -n "$OVH_APPLICATION_SECRET" ]] && [[ -n "$OVH_CONSUMER_KEY" ]]; then
-        # OVH API requires timestamp and signature
-        # For now, mark as configured but needing manual check
+    if [[ -n "$OVH_APPLICATION_KEY" ]] && [[ -n "$OVH_APPLICATION_SECRET" ]] && [[ -n "$OVH_CONSUMER_KEY" ]] && [[ -n "$OVH_IP_ADDRESS" ]]; then
+        # Get firewall rules for the IP
+        rules_response=$(ovh_api_call "GET" "/ip/${OVH_IP_ADDRESS}/firewall")
 
-        script_host="TBD"  # To be determined
+        # Count rules
+        rules_count=$(echo "$rules_response" | jq -r '. | length' 2>/dev/null || echo "0")
+
+        script_host="TBD"  # To be determined - which server runs the OVH update script
         cron_status="N/A"
-        associated_servers="debug.not.live"  # From earlier documentation
-        rules_count="N/A"
-        comments="Managed via OVH API - manual verification needed"
+        associated_servers="debug.not.live"  # From documentation
+        comments="Managed via OVH API"
 
-        echo "OVH,N/A,Edge Network Firewall,ovh-eu,${script_host},${cron_status},\"${associated_servers}\",${rules_count},\"${comments}\"" >> "$OUTPUT_FILE"
+        echo "OVH,${OVH_IP_ADDRESS},Edge Network Firewall,ovh-eu,${script_host},${cron_status},\"${associated_servers}\",${rules_count},\"${comments}\"" >> "$OUTPUT_FILE"
         total_groups=$((total_groups + 1))
 
-        echo -e "  ${YELLOW}⚠${NC} OVH requires manual verification (API auth complex)"
+        echo -e "  ${GREEN}✓${NC} OVH Edge Network Firewall - $rules_count rules"
     else
         echo -e "  ${YELLOW}⚠${NC} OVH credentials not configured"
     fi

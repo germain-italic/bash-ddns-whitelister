@@ -296,7 +296,8 @@ verification_menu() {
     print_option "4" "Test connectivity from NAS" "$BLUE"
     print_option "5" "Check DNS resolution" "$BLUE"
     print_option "6" "Generate comprehensive server report (CSV)" "$GREEN"
-    print_option "7" "View deployment status" "$BLUE"
+    print_option "7" "Generate security groups report (CSV)" "$GREEN"
+    print_option "8" "View deployment status" "$BLUE"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -311,7 +312,8 @@ verification_menu() {
         4) test_connectivity ;;
         5) check_dns ;;
         6) generate_report ;;
-        7) view_status ;;
+        7) generate_sg_report ;;
+        8) view_status ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -1217,6 +1219,42 @@ generate_report() {
     echo
     echo "Or view in columns:"
     echo "  column -t -s',' \$(ls -t ${REPO_DIR}/reports/*.csv | head -1) | less -S"
+
+    wait_for_key
+    verification_menu
+}
+
+# Generate security groups report
+generate_sg_report() {
+    print_header
+    echo -e "${BOLD}${GREEN}Generate Security Groups Report${NC}"
+    print_separator
+    echo
+    cd "${REPO_DIR}/utils"
+
+    echo -e "${CYAN}This will query cloud provider APIs and generate a CSV report with:${NC}"
+    echo "  • Scaleway Security Groups (all zones)"
+    echo "  • AWS Security Groups (all regions)"
+    echo "  • OVH Edge Network Firewall"
+    echo
+    echo "For each security group:"
+    echo "  • Security group ID and name"
+    echo "  • Region/zone"
+    echo "  • Which server manages the DDNS script"
+    echo "  • Associated servers/instances"
+    echo "  • Number of DDNS rules"
+    echo
+    echo -e "${YELLOW}Requires API credentials in scaleway/.env, aws/.env, ovhcloud/.env${NC}"
+    echo -e "${YELLOW}This may take a few minutes...${NC}"
+    echo
+
+    ./generate-security-groups-report.sh
+
+    echo
+    echo -e "${GREEN}Security Groups report generated successfully!${NC}"
+    echo
+    echo "View the latest report with:"
+    echo "  ls -lt ${REPO_DIR}/reports/security-groups* | head -5"
 
     wait_for_key
     verification_menu
