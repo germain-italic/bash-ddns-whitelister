@@ -72,19 +72,27 @@ check_script_installed() {
     local port="$2"
     local user="$3"
     local fw_type="$4"
-    
+
     local install_dir=""
     case "$fw_type" in
-        iptables) install_dir="/root/bash-iptables-ddns" ;;
-        plesk) install_dir="/root/bash-plesk-firewall-ddns" ;;
-        ufw) install_dir="/root/bash-ufw-ddns" ;;
+        iptables|plesk|ufw) install_dir="/root/bash-ddns-whitelister" ;;
+        windows) install_dir="C:\\bash-windows-firewall-ddns" ;;
+        none) echo "N/A"; return ;;
         *) echo "N/A"; return ;;
     esac
-    
-    if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "[ -d '$install_dir' ]" 2>/dev/null; then
-        echo "YES"
+
+    if [[ "$fw_type" == "windows" ]]; then
+        if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "powershell -Command \"Test-Path '$install_dir'\" 2>/dev/null" 2>/dev/null | grep -q "True"; then
+            echo "YES"
+        else
+            echo "NO"
+        fi
     else
-        echo "NO"
+        if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "[ -d '$install_dir' ]" 2>/dev/null; then
+            echo "YES"
+        else
+            echo "NO"
+        fi
     fi
 }
 
@@ -94,15 +102,23 @@ check_cron() {
     local port="$2"
     local user="$3"
     local fw_type="$4"
-    
+
     local pattern=""
     case "$fw_type" in
-        iptables) pattern="bash-iptables-ddns" ;;
-        plesk) pattern="bash-plesk-firewall-ddns" ;;
-        ufw) pattern="bash-ufw-ddns" ;;
+        iptables|plesk|ufw) pattern="bash-ddns-whitelister" ;;
+        windows)
+            # Check for Windows scheduled task
+            if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "powershell -Command \"Get-ScheduledTask -TaskName 'WindowsFirewallDDNS' -ErrorAction SilentlyContinue\" 2>/dev/null" 2>/dev/null | grep -q "WindowsFirewallDDNS"; then
+                echo "YES"
+            else
+                echo "NO"
+            fi
+            return
+            ;;
+        none) echo "N/A"; return ;;
         *) echo "N/A"; return ;;
     esac
-    
+
     if ssh -p "$port" -o ConnectTimeout=5 "${user}@${host}" "crontab -l 2>/dev/null | grep -q '$pattern'" 2>/dev/null; then
         echo "YES"
     else
