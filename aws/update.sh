@@ -197,7 +197,8 @@ cache_ip() {
     echo "$ip" > "$cache_file"
 }
 
-# Find security group rules by IP address (returns rule IDs separated by newlines)
+# Find security group rules by IP address (AWS CLI v1 compatible)
+# Returns "true" if a rule exists for the IP, "" if not
 find_rules_in_sg_by_ip() {
     local sg_id="$1"
     local ip="$2"
@@ -209,14 +210,19 @@ find_rules_in_sg_by_ip() {
         return 0
     fi
 
-    # Get all security group rules using AWS CLI
-    local rules=$(aws ec2 describe-security-group-rules \
+    # Get security group details using AWS CLI v1 compatible command
+    local sg_data=$(aws ec2 describe-security-groups \
         --region "$region" \
-        --filters "Name=group-id,Values=${sg_id}" \
-        --query 'SecurityGroupRules[?CidrIpv4==`'"${ip}/32"'` && IsEgress==`false`].SecurityGroupRuleId' \
-        --output text 2>/dev/null || echo "")
+        --group-ids "$sg_id" \
+        --query "SecurityGroups[0].IpPermissions[?contains(IpRanges[].CidrIp, '${ip}/32')]" \
+        --output json 2>/dev/null)
 
-    echo "$rules"
+    # Check if any rules were found
+    if [[ -n "$sg_data" ]] && [[ "$sg_data" != "[]" ]] && [[ "$sg_data" != "null" ]]; then
+        echo "true"
+    else
+        echo ""
+    fi
 }
 
 # Create security group rule (TCP only)
@@ -251,44 +257,44 @@ create_security_group_rule() {
     return 1
 }
 
-# Delete security group rules with IP verification
+# Delete security group rules with IP verification (AWS CLI v1 compatible)
 # IMPORTANT: Only deletes rules if their IP matches expected_ip (safety check)
-delete_security_group_rules() {
+delete_security_group_rules_by_ip() {
     local sg_id="$1"
-    local rule_ids="$2"
-    local expected_ip="$3"
-    local region="${4:-$AWS_DEFAULT_REGION}"
+    local expected_ip="$2"
+    local region="${3:-$AWS_DEFAULT_REGION}"
 
     # Safety check: require expected_ip
     if [[ -z "$expected_ip" ]]; then
-        log "ERROR: delete_security_group_rules requires expected_ip parameter"
+        log "ERROR: delete_security_group_rules_by_ip requires expected_ip parameter"
         return 1
     fi
 
-    # Convert space-separated to array
-    read -ra IDS <<< "$rule_ids"
+    # Get all IP permissions for this IP (AWS CLI v1 compatible)
+    local ip_perms=$(aws ec2 describe-security-groups \
+        --region "$region" \
+        --group-ids "$sg_id" \
+        --query "SecurityGroups[0].IpPermissions[?contains(IpRanges[].CidrIp, '${expected_ip}/32')]" \
+        --output json 2>/dev/null)
 
-    for rule_id in "${IDS[@]}"; do
-        # Get rule details to verify IP
-        local rule_ip=$(aws ec2 describe-security-group-rules \
-            --region "$region" \
-            --security-group-rule-ids "$rule_id" \
-            --query 'SecurityGroupRules[0].CidrIpv4' \
-            --output text 2>/dev/null || echo "")
+    # Check if any rules exist
+    if [[ -z "$ip_perms" ]] || [[ "$ip_perms" == "[]" ]] || [[ "$ip_perms" == "null" ]]; then
+        log "No rules found for ${expected_ip}/32"
+        return 0
+    fi
 
-        # Verify IP matches before deleting (safety check to avoid deleting other rules)
-        if [[ "$rule_ip" == "${expected_ip}/32" ]]; then
-            aws ec2 revoke-security-group-ingress \
-                --region "$region" \
-                --group-id "$sg_id" \
-                --security-group-rule-ids "$rule_id" \
-                --output json &>/dev/null
+    # Revoke using ip-permissions structure (AWS CLI v1 compatible)
+    aws ec2 revoke-security-group-ingress \
+        --region "$region" \
+        --group-id "$sg_id" \
+        --ip-permissions "$ip_perms" \
+        --output json &>/dev/null
 
-            log "Deleted rule ID: ${rule_id} (IP: ${rule_ip})"
-        else
-            log "WARNING: Skipping deletion of rule ${rule_id} - IP mismatch (expected: ${expected_ip}/32, found: ${rule_ip:-none})"
-        fi
-    done
+    if [[ $? -eq 0 ]]; then
+        log "Deleted rules for IP: ${expected_ip}/32"
+    else
+        log "WARNING: Failed to delete rules for ${expected_ip}/32"
+    fi
 }
 
 # Update security group rules (delete old, create/reuse new)
@@ -299,16 +305,13 @@ update_security_group_rules() {
     local identifier="$4"
     local region="${5:-$AWS_DEFAULT_REGION}"
 
-    # Find existing rules for old IP in security group (not cache)
-    local old_rule_ids=""
+    # Delete old rules if old IP is provided
     if [[ -n "$old_ip" ]]; then
-        old_rule_ids=$(find_rules_in_sg_by_ip "$sg_id" "$old_ip" "$region")
-    fi
-
-    # Delete old rules with IP verification (safety check)
-    if [[ -n "$old_rule_ids" ]]; then
-        log "Found old rules for ${identifier} (${old_ip}): ${old_rule_ids}"
-        delete_security_group_rules "$sg_id" "$old_rule_ids" "$old_ip" "$region"
+        local old_rules_exist=$(find_rules_in_sg_by_ip "$sg_id" "$old_ip" "$region")
+        if [[ -n "$old_rules_exist" ]]; then
+            log "Found old rules for ${identifier} (${old_ip}), deleting..."
+            delete_security_group_rules_by_ip "$sg_id" "$old_ip" "$region"
+        fi
     fi
 
     # Check if rules already exist for new IP (avoid duplicates)
@@ -316,11 +319,7 @@ update_security_group_rules() {
 
     if [[ -n "$existing_new_rules" ]]; then
         # Rules already exist for this IP - reuse them instead of creating duplicates
-        log "Rules already exist for ${identifier} (${new_ip}), reusing: ${existing_new_rules}"
-
-        # Cache the existing rule ID
-        local cache_key="${sg_id}_${identifier}_rule_id"
-        echo "$existing_new_rules" | head -1 > "${CACHE_DIR}/${cache_key}.cache"
+        log "Rules already exist for ${identifier} (${new_ip}), reusing existing rules"
     else
         # Create new rule (none exist for this IP)
         create_security_group_rule "$sg_id" "$new_ip" "$identifier" "$region"

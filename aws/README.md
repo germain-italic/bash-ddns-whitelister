@@ -14,35 +14,15 @@ This script automatically updates AWS security group rules when a dynamic hostna
 - IP caching to minimize API calls
 - Comprehensive logging with rotation
 - Multi-region support
+- **Auto-installation** of AWS CLI if not present
 
 ## Requirements
 
-- AWS CLI installed and configured
-- AWS IAM user with appropriate permissions (see below)
+- AWS API credentials (Access Key ID and Secret Access Key)
+- `curl` for downloading AWS CLI (if not installed)
+- `unzip` for extracting AWS CLI package
 - `dig` or `host` for DNS resolution
 - Security group must exist in AWS
-
-## IAM Permissions Required
-
-Create an IAM user with the following policy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:DescribeSecurityGroups",
-        "ec2:DescribeSecurityGroupRules",
-        "ec2:AuthorizeSecurityGroupIngress",
-        "ec2:RevokeSecurityGroupIngress"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
 
 ## Configuration
 
@@ -56,12 +36,11 @@ Create an IAM user with the following policy:
    # AWS API credentials
    AWS_ACCESS_KEY_ID="your-access-key-id"
    AWS_SECRET_ACCESS_KEY="your-secret-access-key"
-   AWS_DEFAULT_REGION="eu-west-1"
+   AWS_DEFAULT_REGION="eu-west-3"
 
    # Rules configuration
    AWS_RULES=(
-       "sg-0123456789abcdef0|nas1|nas1.example.com|eu-west-1"
-       "sg-abcdef0123456789|nas2|nas2.example.com|us-east-1"
+       "sg-0f4dc24e75e170997|nas1|nas1.example.com|eu-west-3"
    )
    ```
 
@@ -69,48 +48,30 @@ Create an IAM user with the following policy:
 
 Each rule is defined as: `security_group_id|identifier|hostname|region`
 
-- **security_group_id**: ID of the AWS security group (e.g., "sg-0123456789abcdef0")
+- **security_group_id**: AWS security group ID (e.g., "sg-0f4dc24e75e170997")
 - **identifier**: Unique identifier for this rule (e.g., "nas1", "backup")
 - **hostname**: Dynamic hostname to resolve to IP
-- **region**: AWS region (e.g., "eu-west-1", "us-east-1", "ap-southeast-1")
+- **region**: AWS region (e.g., "eu-west-3", "us-east-1", "ap-southeast-1")
 
-### Common AWS Regions
+### Available Regions
 
-- `eu-west-1` - Ireland
-- `eu-west-2` - London
-- `eu-west-3` - Paris
-- `eu-central-1` - Frankfurt
-- `us-east-1` - N. Virginia
-- `us-west-1` - N. California
-- `us-west-2` - Oregon
-- `ap-southeast-1` - Singapore
-- `ap-northeast-1` - Tokyo
+See [AWS Regions](https://docs.aws.amazon.com/general/latest/gr/rande.html) for complete list.
+
+Common regions:
+- `eu-west-1`, `eu-west-2`, `eu-west-3` - Europe (Ireland, London, Paris)
+- `us-east-1`, `us-east-2` - US East (N. Virginia, Ohio)
+- `us-west-1`, `us-west-2` - US West (N. California, Oregon)
+- `ap-southeast-1`, `ap-southeast-2` - Asia Pacific (Singapore, Sydney)
 
 ## Usage
-
-### Install AWS CLI
-
-The script will **automatically detect and install AWS CLI** if not present.
-
-To manually verify or install:
-
-```bash
-# Check if installed
-aws --version
-
-# Manual installation (if needed)
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-```
-
-**Note:** The script's auto-installation requires `sudo` privileges and `unzip` package.
 
 ### Manual Execution
 
 ```bash
 ./update.sh
 ```
+
+The script will automatically install AWS CLI if not present.
 
 ### Automated Execution (Cron)
 
@@ -122,21 +83,43 @@ Add to crontab to run every 5 minutes:
 
 ## How It Works
 
-1. **DNS Resolution**: Resolves each configured hostname to its current IP
-2. **Cache Check**: Compares with cached IP to detect changes
-3. **Rule Management**:
-   - If IP changed: Deletes old rule and creates new rule with new IP
+1. **AWS CLI Check**: Verifies AWS CLI is installed, installs it automatically if needed
+2. **DNS Resolution**: Resolves each configured hostname to its current IP
+3. **Cache Check**: Compares with cached IP to detect changes
+4. **Rule Management**:
+   - If IP changed: Revokes old rule and authorizes new rule with new IP
    - If IP unchanged: No action taken
-4. **Caching**: Stores new IP and rule ID for future comparisons
-5. **Logging**: Records all actions with timestamps
+   - If rules exist for new IP: Reuses existing rules (avoids duplicates)
+5. **Caching**: Stores new IP and rule ID for future comparisons
+6. **Logging**: Records all actions with timestamps
+
+## AWS CLI Auto-Installation
+
+The script includes an automatic installation mechanism for AWS CLI v2:
+
+- Detects if AWS CLI is already installed
+- Downloads AWS CLI v2 from official AWS sources
+- Extracts and installs automatically
+- Handles both root and sudo scenarios
+- Provides detailed error messages if installation fails
+
+If AWS CLI installation fails, you can install it manually:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install unzip
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+```
 
 ## Security Group Rule Details
 
 Created rules have the following properties:
+- **Direction**: Inbound
+- **IP Range**: `<resolved-ip>/32`
 - **Protocol**: TCP
 - **Port Range**: 0-65535 (all TCP ports)
-- **IP Range**: `<resolved-ip>/32`
-- **Description**: Identifier specified in the rule
 
 ## Logging
 
@@ -144,12 +127,12 @@ Logs are stored in `update.log` and automatically rotated based on `LOG_ROTATION
 
 Log format:
 ```
-[2025-11-17 00:00:00] Starting AWS security group update
-[2025-11-17 00:00:01] Processing security group sg-abc123 - nas1 (nas1.example.com)
-[2025-11-17 00:00:02] IP change detected for nas1: 1.2.3.4 -> 5.6.7.8
-[2025-11-17 00:00:03] Deleted rule ID: sgr-xyz789
-[2025-11-17 00:00:04] Created TCP rule ID: sgr-abc456 for nas1 (5.6.7.8/32)
-[2025-11-17 00:00:05] Update completed: 1 rule(s) updated
+[2025-11-17 01:00:00] Starting AWS security group update
+[2025-11-17 01:00:01] Processing security group sg-123... - nas1 (nas.example.com) in region eu-west-3
+[2025-11-17 01:00:02] IP change detected for nas1: 1.2.3.4 -> 5.6.7.8
+[2025-11-17 01:00:03] Deleted rule ID: sgr-xyz789 (IP: 1.2.3.4/32)
+[2025-11-17 01:00:04] Created TCP rule ID: sgr-abc456 for nas1 (5.6.7.8/32)
+[2025-11-17 01:00:05] Update completed: 1 rule(s) updated
 ```
 
 ## Caching
@@ -164,13 +147,17 @@ The script uses two types of cache files in `.cache/`:
 
 ## Troubleshooting
 
-### Security Group Not Found
+### AWS CLI Not Found
+
+The script automatically installs AWS CLI if not found. If installation fails:
 
 ```
-ERROR: Cannot find security group sg-abc123
+ERROR: unzip is not installed. Please install it first:
+  sudo apt-get install unzip  # Debian/Ubuntu
+  sudo yum install unzip      # RHEL/CentOS
 ```
 
-**Solution**: Verify the security group exists and the ID is correct. Check region is correct.
+**Solution**: Install `unzip` then re-run the script.
 
 ### Cannot Resolve Hostname
 
@@ -185,30 +172,38 @@ WARNING: Cannot resolve nas1.example.com
 
 ### AWS Authentication Failed
 
-**Solution**: Verify `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are correct.
+**Solution**:
+- Verify `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are correct
+- Check IAM user has proper permissions
+- Verify region is correct
 
-### Permission Denied
+### Rule Creation Failed
 
+**Solution**:
+- Check you have permission to modify the security group (ec2:AuthorizeSecurityGroupIngress)
+- Verify the security group exists in the specified region
+- Check AWS API rate limits
+
+## Required IAM Permissions
+
+Your AWS Access Key must have the following permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSecurityGroupRules",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupIngress"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
 ```
-ERROR: User is not authorized to perform: ec2:AuthorizeSecurityGroupIngress
-```
-
-**Solution**: Check IAM user has the required permissions (see IAM Permissions section).
-
-### AWS CLI Not Found
-
-```
-ERROR: aws command not found
-```
-
-**Solution**: Install AWS CLI (see Installation section).
-
-## API Rate Limits
-
-AWS has API rate limits. The script minimizes API calls by:
-- Using IP cache (only updates on IP changes)
-- Using rule ID cache (avoids searching for rules)
-- Batching operations per security group
 
 ## Examples
 
@@ -216,7 +211,7 @@ AWS has API rate limits. The script minimizes API calls by:
 
 ```bash
 AWS_RULES=(
-    "sg-0123456789abcdef0|nas1|nas.example.com|eu-west-1"
+    "sg-0f4dc24e75e170997|nas1|nas.example.com|eu-west-3"
 )
 ```
 
@@ -224,8 +219,8 @@ AWS_RULES=(
 
 ```bash
 AWS_RULES=(
-    "sg-0123456789abcdef0|nas1|nas1.example.com|eu-west-1"
-    "sg-0123456789abcdef0|nas2|nas2.example.com|eu-west-1"
+    "sg-0f4dc24e75e170997|nas1|nas1.example.com|eu-west-3"
+    "sg-0f4dc24e75e170997|nas2|nas2.example.com|eu-west-3"
 )
 ```
 
@@ -233,9 +228,9 @@ AWS_RULES=(
 
 ```bash
 AWS_RULES=(
-    "sg-0123456789abcdef0|nas1|nas.example.com|eu-west-1"
-    "sg-abcdef0123456789|backup|backup.example.com|us-east-1"
-    "sg-fedcba9876543210|monitoring|monitor.example.com|ap-southeast-1"
+    "sg-0f4dc24e75e170997|nas1|nas.example.com|eu-west-3"
+    "sg-abc123def456|backup|backup.example.com|us-east-1"
+    "sg-xyz789uvw123|monitor|monitor.example.com|ap-southeast-1"
 )
 ```
 
@@ -243,15 +238,15 @@ AWS_RULES=(
 
 - **Credentials**: Never commit `.env` to version control
 - **Permissions**: Limit IAM user permissions to security groups only
-- **IP Whitelisting**: Consider limiting to specific ports instead of all TCP
+- **IP Whitelisting**: Consider whitelisting specific ports instead of all TCP ports
 - **Monitoring**: Regularly review security group rules in AWS console
 
 ## Related Scripts
 
-- `../scaleway/update.sh` - Scaleway security group management
 - `../iptables/update.sh` - Server-level iptables management
+- `../scaleway/update.sh` - Scaleway security group management
 - `../utils/generate-report.sh` - Comprehensive server status reports
 
 ## Support
 
-For issues or questions, check the main [README](../README.md).
+For issues or questions, check the main [README](../README.md) or [API_INTEGRATION.md](../API_INTEGRATION.md).

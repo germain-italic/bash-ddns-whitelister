@@ -7,3 +7,9 @@
 # Log files
 *.log
 *.log.old
+
+# AWS CLI installation artifacts
+dist/
+install
+THIRD_PARTY_LICENSES
+awscliv2.zip
