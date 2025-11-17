@@ -3,24 +3,19 @@
 
 set -euo pipefail
 
-REPO_DIR="/home/germain/dev/bash-ddns-whitelister"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENV_FILE="${SCRIPT_DIR}/.env"
 
-# Servers to deploy (host:port:user:firewall_type)
-SERVERS=(
-    "server1.example.com:22:root:iptables"
-    "server2.example.com:22:root:plesk"
-    "server3.example.com:22:root:iptables"
-    "server4.example.com:22:root:iptables"
-    "server5.example.com:22:root:iptables"
-    "server6.example.com:22:root:iptables"
-    "server7.example.com:22:root:ufw"
-    "server8.example.com:22:root:ufw"
-    "server9.example.com:22:root:iptables"
-    "server10.example.com:2222:root:iptables"
-    "server11.example.com:22:root:iptables"
-    "server12.example.com:22:root:iptables"
-    "server13.example.com:22:root:plesk"
-)
+# Check if .env exists
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "ERROR: .env file not found at $ENV_FILE"
+    echo "Please copy .env.dist to .env and configure your servers"
+    exit 1
+fi
+
+# Source the .env file to get SERVERS array
+source "$ENV_FILE"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📦 Re-deploying firewall scripts to all servers"
