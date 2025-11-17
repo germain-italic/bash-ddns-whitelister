@@ -240,22 +240,38 @@ ovh_api_call() {
 if [[ -f "$OVH_ENV" ]]; then
     source "$OVH_ENV"
 
-    if [[ -n "$OVH_APPLICATION_KEY" ]] && [[ -n "$OVH_APPLICATION_SECRET" ]] && [[ -n "$OVH_CONSUMER_KEY" ]] && [[ -n "$OVH_IP_ADDRESS" ]]; then
-        # Get firewall rules for the IP
-        rules_response=$(ovh_api_call "GET" "/ip/${OVH_IP_ADDRESS}/firewall")
+    if [[ -n "$OVH_APPLICATION_KEY" ]] && [[ -n "$OVH_APPLICATION_SECRET" ]] && [[ -n "$OVH_CONSUMER_KEY" ]]; then
+        # Check if OVH_RULES array exists and has entries
+        if [[ ${#OVH_RULES[@]} -gt 0 ]]; then
+            # Process each IP in OVH_RULES
+            for rule_config in "${OVH_RULES[@]}"; do
+                # Parse rule: ip_address|identifier|hostname
+                IFS='|' read -ra PARTS <<< "$rule_config"
+                ovh_ip="${PARTS[0]}"
+                rule_identifier="${PARTS[1]:-unknown}"
+                rule_hostname="${PARTS[2]:-}"
 
-        # Count rules
-        rules_count=$(echo "$rules_response" | jq -r '. | length' 2>/dev/null || echo "0")
+                # Get firewall rules for this IP
+                # OVH API uses URL-encoded IP (replace . with %2E)
+                ovh_ip_encoded=$(echo "$ovh_ip" | sed 's/\./\%2E/g')
+                rules_response=$(ovh_api_call "GET" "/ip/${ovh_ip_encoded}/firewall")
 
-        script_host="TBD"  # To be determined - which server runs the OVH update script
-        cron_status="N/A"
-        associated_servers="debug.not.live"  # From documentation
-        comments="Managed via OVH API"
+                # Count rules
+                rules_count=$(echo "$rules_response" | jq -r '. | length' 2>/dev/null || echo "0")
 
-        echo "OVH,${OVH_IP_ADDRESS},Edge Network Firewall,ovh-eu,${script_host},${cron_status},\"${associated_servers}\",${rules_count},\"${comments}\"" >> "$OUTPUT_FILE"
-        total_groups=$((total_groups + 1))
+                script_host="TBD"  # To be determined - which server runs the OVH update script
+                cron_status="N/A"
+                associated_servers="debug.not.live ($ovh_ip)"
+                comments="Managed via OVH API - Hostname: $rule_hostname"
 
-        echo -e "  ${GREEN}✓${NC} OVH Edge Network Firewall - $rules_count rules"
+                echo "OVH,${ovh_ip},Edge Network Firewall,ovh-eu,${script_host},${cron_status},\"${associated_servers}\",${rules_count},\"${comments}\"" >> "$OUTPUT_FILE"
+                total_groups=$((total_groups + 1))
+
+                echo -e "  ${GREEN}✓${NC} OVH Edge Network Firewall ($ovh_ip) - $rules_count rules"
+            done
+        else
+            echo -e "  ${YELLOW}⚠${NC} No OVH_RULES configured"
+        fi
     else
         echo -e "  ${YELLOW}⚠${NC} OVH credentials not configured"
     fi
