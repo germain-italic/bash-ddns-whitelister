@@ -97,8 +97,11 @@ deployment_menu() {
     print_option "1" "Deploy to iptables servers" "$GREEN"
     print_option "2" "Deploy to Plesk servers" "$GREEN"
     print_option "3" "Deploy to UFW servers" "$GREEN"
-    print_option "4" "Detect firewall types on all servers" "$CYAN"
-    print_option "5" "Deploy SSH keys to servers" "$CYAN"
+    print_option "4" "Deploy to Scaleway Security Groups" "$GREEN"
+    print_option "5" "Deploy to AWS Security Groups" "$GREEN"
+    print_option "6" "Deploy to OVH Edge Network Firewall" "$GREEN"
+    print_option "7" "Detect firewall types on all servers" "$CYAN"
+    print_option "8" "Deploy SSH keys to servers" "$CYAN"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -110,8 +113,11 @@ deployment_menu() {
         1) deploy_iptables ;;
         2) deploy_plesk ;;
         3) deploy_ufw ;;
-        4) detect_firewalls ;;
-        5) deploy_ssh_keys ;;
+        4) deploy_scaleway ;;
+        5) deploy_aws ;;
+        6) deploy_ovh ;;
+        7) detect_firewalls ;;
+        8) deploy_ssh_keys ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -666,6 +672,99 @@ deploy_ufw() {
     echo
     echo -e "${CYAN}Deploying to ${hostname}:${port} as ${user}...${NC}"
     cd "${REPO_DIR}/ufw"
+    ./deploy.sh "$hostname" "$port" "$user"
+
+    wait_for_key
+    deployment_menu
+}
+
+# Deploy to Scaleway Security Groups
+deploy_scaleway() {
+    print_header
+    echo -e "${BOLD}${GREEN}Deploy to Scaleway Security Groups${NC}"
+    print_separator
+    echo
+    echo "Enter server hostname (or press Enter to cancel):"
+    read hostname
+
+    if [ -z "$hostname" ]; then
+        deployment_menu
+        return
+    fi
+
+    echo "Enter SSH port [default: 22]:"
+    read port
+    port=${port:-22}
+
+    echo "Enter SSH user [default: root]:"
+    read user
+    user=${user:-root}
+
+    echo
+    echo -e "${CYAN}Deploying to ${hostname}:${port} as ${user}...${NC}"
+    cd "${REPO_DIR}/scaleway"
+    ./deploy.sh "$hostname" "$port" "$user"
+
+    wait_for_key
+    deployment_menu
+}
+
+# Deploy to AWS Security Groups
+deploy_aws() {
+    print_header
+    echo -e "${BOLD}${GREEN}Deploy to AWS Security Groups${NC}"
+    print_separator
+    echo
+    echo "Enter server hostname (or press Enter to cancel):"
+    read hostname
+
+    if [ -z "$hostname" ]; then
+        deployment_menu
+        return
+    fi
+
+    echo "Enter SSH port [default: 22]:"
+    read port
+    port=${port:-22}
+
+    echo "Enter SSH user [default: root]:"
+    read user
+    user=${user:-root}
+
+    echo
+    echo -e "${CYAN}Deploying to ${hostname}:${port} as ${user}...${NC}"
+    cd "${REPO_DIR}/aws"
+    ./deploy.sh "$hostname" "$port" "$user"
+
+    wait_for_key
+    deployment_menu
+}
+
+# Deploy to OVH Edge Network Firewall
+deploy_ovh() {
+    print_header
+    echo -e "${BOLD}${GREEN}Deploy to OVH Edge Network Firewall${NC}"
+    print_separator
+    echo
+    echo "Enter server hostname (or press Enter to cancel):"
+    read hostname
+
+    if [ -z "$hostname" ]; then
+        deployment_menu
+        return
+    fi
+
+    echo "Enter SSH port [default: 22]:"
+    read port
+    port=${port:-22}
+
+    echo "Enter SSH user [default: root]:"
+    read user
+    user=${user:-root}
+
+    echo
+    echo -e "${CYAN}Deploying to ${hostname}:${port} as ${user}...${NC}"
+    cd "${REPO_DIR}/ovhcloud"
     ./deploy.sh "$hostname" "$port" "$user"
 
     wait_for_key

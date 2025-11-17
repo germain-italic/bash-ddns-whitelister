@@ -11,6 +11,9 @@ bash-ddns-whitelister/
 ├── iptables/          # For iptables-based firewalls
 ├── plesk/             # For Plesk Firewall
 ├── ufw/               # For UFW (Uncomplicated Firewall)
+├── scaleway/          # For Scaleway Security Groups API
+├── aws/               # For AWS Security Groups API
+├── ovhcloud/          # For OVH Edge Network Firewall API
 └── utils/             # Utility scripts for mass deployment
 ```
 
@@ -158,6 +161,7 @@ cp .env.dist .env
 ./deploy-ssh-keys.sh
 
 # 5. Deploy DDNS scripts to each server type
+# For server-level firewalls (iptables, UFW, Plesk)
 cd ../iptables
 ./deploy.sh server1.example.com 22 root
 
@@ -166,6 +170,16 @@ cd ../plesk
 
 cd ../ufw
 ./deploy.sh server3.example.com 22 root
+
+# For cloud provider APIs (Scaleway, AWS, OVH)
+cd ../scaleway
+./deploy.sh server4.example.com 22 root
+
+cd ../aws
+./deploy.sh server5.example.com 22 root
+
+cd ../ovhcloud
+./deploy.sh server6.example.com 22 root
 
 # 6. Test from NAS (run this command ON the NAS)
 cd ../utils
