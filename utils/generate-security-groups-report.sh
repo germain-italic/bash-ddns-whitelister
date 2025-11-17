@@ -295,13 +295,6 @@ else
 fi
 
 echo
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  Report Generation Complete${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo -e "Total security groups: $total_groups"
-echo -e "Output file: ${GREEN}$OUTPUT_FILE${NC}"
-echo
-echo "You can view the report with:"
-echo "  cat $OUTPUT_FILE"
-echo "  column -t -s',' $OUTPUT_FILE | less -S"
+echo -e "${GREEN}✓${NC} Report generated: ${GREEN}$(basename "$OUTPUT_FILE")${NC}"
+echo -e "  Total security groups: $total_groups"
 echo
