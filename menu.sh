@@ -212,9 +212,6 @@ utilities_menu() {
     print_option "5" "Test NAS blocking on all servers" "$CYAN"
     print_option "6" "Clean old cron entries from servers" "$CYAN"
     print_option "7" "Update repos on all servers" "$CYAN"
-    print_option "8" "Redeploy to all servers" "$CYAN"
-    print_option "9" "Deploy to missing servers" "$CYAN"
-    print_option "10" "Generate deployment report (CSV)" "$GREEN"
     echo
     print_separator
     print_option "0" "Back to main menu" "$YELLOW"
@@ -230,9 +227,6 @@ utilities_menu() {
         5) test_nas_blocking ;;
         6) clean_old_crons ;;
         7) update_all_repos ;;
-        8) redeploy_all ;;
-        9) deploy_missing ;;
-        10) generate_report ;;
         0) show_main_menu ;;
         *)
             echo -e "${RED}Invalid option!${NC}"
@@ -1522,81 +1516,6 @@ update_all_repos() {
     fi
 
     ./update-all-repos.sh
-
-    wait_for_key
-    utilities_menu
-}
-
-# Redeploy to all servers
-redeploy_all() {
-    print_header
-    echo -e "${BOLD}${CYAN}Redeploy to All Servers${NC}"
-    print_separator
-    echo
-    echo -e "${YELLOW}WARNING: This will redeploy firewall scripts to ALL configured servers${NC}"
-    echo
-    echo -n "Are you sure? (y/N): "
-    read confirm
-
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Cancelled"
-        wait_for_key
-        utilities_menu
-        return
-    fi
-
-    cd "${REPO_DIR}/utils"
-
-    if [ ! -f .env ]; then
-        echo -e "${RED}ERROR: utils/.env not found${NC}"
-        wait_for_key
-        utilities_menu
-        return
-    fi
-
-    ./redeploy-all.sh
-
-    wait_for_key
-    utilities_menu
-}
-
-# Deploy to missing servers
-deploy_missing() {
-    print_header
-    echo -e "${BOLD}${CYAN}Deploy to Missing Servers${NC}"
-    print_separator
-    echo
-    cd "${REPO_DIR}/utils"
-
-    if [ ! -f .env ]; then
-        echo -e "${RED}ERROR: utils/.env not found${NC}"
-        wait_for_key
-        utilities_menu
-        return
-    fi
-
-    ./deploy-missing-repos.sh
-
-    wait_for_key
-    utilities_menu
-}
-
-# Generate deployment report
-generate_report() {
-    print_header
-    echo -e "${BOLD}${GREEN}Generate Deployment Report${NC}"
-    print_separator
-    echo
-    cd "${REPO_DIR}/utils"
-
-    if [ ! -f .env ]; then
-        echo -e "${RED}ERROR: utils/.env not found${NC}"
-        wait_for_key
-        utilities_menu
-        return
-    fi
-
-    ./generate-report.sh
 
     wait_for_key
     utilities_menu
