@@ -10,6 +10,9 @@ set -euo pipefail
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Plesk binary path (use full path for cron compatibility)
+PLESK_BIN="/usr/sbin/plesk"
+
 # Configuration files
 ENV_FILE="${SCRIPT_DIR}/.env"
 RULES_FILE="${SCRIPT_DIR}/firewall_rules.conf"
@@ -34,8 +37,8 @@ fi
 mkdir -p "$CACHE_DIR"
 
 # Check if Plesk firewall extension is available
-if ! command -v plesk &> /dev/null; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Plesk command not found. This script requires Plesk." | tee -a "$LOG_FILE"
+if [[ ! -x "$PLESK_BIN" ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Plesk command not found at $PLESK_BIN. This script requires Plesk." | tee -a "$LOG_FILE"
     exit 1
 fi
 
@@ -129,7 +132,7 @@ cache_ip() {
 get_rule_id() {
     local rule_name="$1"
     # Pass rule_name as argument to Python to avoid injection
-    plesk ext firewall --list-json 2>/dev/null | \
+    $PLESK_BIN ext firewall --list-json 2>/dev/null | \
         python3 -c "import sys, json; rule_name = sys.argv[1]; rules = json.load(sys.stdin); print(next((r['id'] for r in rules if r['name'] == rule_name), ''))" "$rule_name"
 }
 
@@ -181,7 +184,7 @@ update_plesk_rule() {
     local rule_id=$(get_rule_id "$rule_name")
 
     # Build command array (safer than string concatenation)
-    local cmd_array=(plesk ext firewall --set-rule)
+    local cmd_array=($PLESK_BIN ext firewall --set-rule)
 
     if [[ -n "$rule_id" ]]; then
         # Update existing rule by ID
@@ -231,7 +234,7 @@ apply_and_confirm() {
 
     # Apply changes with auto-confirm option
     # This is safer for automated scripts as it doesn't require a second SSH session
-    local output=$(plesk ext firewall --apply -auto-confirm-this-may-lock-me-out-of-the-server 2>&1)
+    local output=$($PLESK_BIN ext firewall --apply -auto-confirm-this-may-lock-me-out-of-the-server 2>&1)
     echo "$output" >> "$LOG_FILE"
 
     if echo "$output" | grep -q "were applied\|was applied\|were confirmed\|was confirmed"; then
