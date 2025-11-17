@@ -39,16 +39,16 @@ This script automatically updates Scaleway security group rules when a dynamic h
 
    # Rules configuration
    SCALEWAY_RULES=(
-       "office-vpn|nas1|nas1.example.com|fr-par-1"
-       "office-vpn|nas2|nas2.example.com|fr-par-1"
+       "7a0add70-3b70-443b-857b-448501b57303|nas1|nas1.example.com|fr-par-1"
+       "7a0add70-3b70-443b-857b-448501b57303|nas2|nas2.example.com|fr-par-1"
    )
    ```
 
 ## Rule Format
 
-Each rule is defined as: `security_group_name|identifier|hostname|zone`
+Each rule is defined as: `security_group_id|identifier|hostname|zone`
 
-- **security_group_name**: Name of the Scaleway security group (must exist)
+- **security_group_id**: UUID of the Scaleway security group (e.g., "7a0add70-3b70-443b-857b-448501b57303")
 - **identifier**: Unique identifier for this rule (e.g., "nas1", "backup")
 - **hostname**: Dynamic hostname to resolve to IP
 - **zone**: Scaleway zone (e.g., "fr-par-1", "fr-par-2", "nl-ams-1", "pl-waw-1")
@@ -124,10 +124,10 @@ The script uses two types of cache files in `.cache/`:
 ### Security Group Not Found
 
 ```
-ERROR: Security group 'office-vpn' not found in zone fr-par-1
+ERROR: Security group with ID '7a0add70...' not found in zone fr-par-1
 ```
 
-**Solution**: Verify the security group exists and the name is correct. Check zone is correct.
+**Solution**: Verify the security group UUID is correct and exists. Check zone is correct.
 
 ### Cannot Resolve Hostname
 
@@ -164,7 +164,7 @@ Scaleway has API rate limits. The script minimizes API calls by:
 
 ```bash
 SCALEWAY_RULES=(
-    "office-vpn|nas1|nas.example.com|fr-par-1"
+    "7a0add70-3b70-443b-857b-448501b57303|nas1|nas.example.com|fr-par-1"
 )
 ```
 
@@ -172,8 +172,8 @@ SCALEWAY_RULES=(
 
 ```bash
 SCALEWAY_RULES=(
-    "office-vpn|nas1|nas1.example.com|fr-par-1"
-    "office-vpn|nas2|nas2.example.com|fr-par-1"
+    "7a0add70-3b70-443b-857b-448501b57303|nas1|nas1.example.com|fr-par-1"
+    "7a0add70-3b70-443b-857b-448501b57303|nas2|nas2.example.com|fr-par-1"
 )
 ```
 
@@ -181,9 +181,9 @@ SCALEWAY_RULES=(
 
 ```bash
 SCALEWAY_RULES=(
-    "office-vpn|nas1|nas.example.com|fr-par-1"
-    "backup-access|backup|backup.example.com|nl-ams-1"
-    "monitoring|monitor|monitor.example.com|pl-waw-1"
+    "7a0add70-3b70-443b-857b-448501b57303|nas1|nas.example.com|fr-par-1"
+    "43f2f0ec-f307-46cd-9f49-aea452b4cfaa|backup|backup.example.com|nl-ams-1"
+    "dcf02207-4cd5-43db-9f35-53f2ec8b7f64|monitor|monitor.example.com|pl-waw-1"
 )
 ```
 
