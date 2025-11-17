@@ -47,6 +47,79 @@ export AWS_ACCESS_KEY_ID
 export AWS_SECRET_ACCESS_KEY
 export AWS_DEFAULT_REGION
 
+# Check and install AWS CLI if needed
+ensure_aws_cli() {
+    if command -v aws &> /dev/null; then
+        # AWS CLI already installed
+        return 0
+    fi
+
+    echo "AWS CLI not found. Installing..."
+
+    # Check for unzip
+    if ! command -v unzip &> /dev/null; then
+        echo "ERROR: unzip is not installed. Please install it first:"
+        echo "  sudo apt-get install unzip  # Debian/Ubuntu"
+        echo "  sudo yum install unzip      # RHEL/CentOS"
+        return 1
+    fi
+
+    # Create temp directory
+    local tmp_dir=$(mktemp -d)
+    local original_dir=$(pwd)
+    cd "$tmp_dir"
+
+    # Download AWS CLI v2
+    echo "Downloading AWS CLI..."
+    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+    if [[ ! -f "awscliv2.zip" ]] || [[ ! -s "awscliv2.zip" ]]; then
+        echo "ERROR: Failed to download AWS CLI"
+        cd "$original_dir"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Unzip
+    echo "Extracting..."
+    if ! unzip -q awscliv2.zip 2>&1; then
+        echo "ERROR: Failed to extract AWS CLI package"
+        cd "$original_dir"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Install (requires sudo)
+    echo "Installing AWS CLI..."
+    local install_output
+    if [[ $EUID -eq 0 ]]; then
+        # Running as root
+        install_output=$(./aws/install 2>&1)
+    else
+        # Need sudo
+        install_output=$(sudo ./aws/install 2>&1)
+    fi
+
+    local install_result=$?
+
+    # Cleanup
+    cd "$original_dir"
+    rm -rf "$tmp_dir"
+
+    # Verify installation
+    if [[ $install_result -eq 0 ]] && command -v aws &> /dev/null; then
+        echo "AWS CLI installed successfully: $(aws --version)"
+        return 0
+    else
+        echo "ERROR: AWS CLI installation failed"
+        echo "Install output: $install_output"
+        return 1
+    fi
+}
+
+# Ensure AWS CLI is installed
+ensure_aws_cli || exit 1
+
 # Logging function
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"

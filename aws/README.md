@@ -90,17 +90,21 @@ Each rule is defined as: `security_group_id|identifier|hostname|region`
 
 ### Install AWS CLI
 
-If not already installed:
+The script will **automatically detect and install AWS CLI** if not present.
+
+To manually verify or install:
 
 ```bash
-# On Debian/Ubuntu
+# Check if installed
+aws --version
+
+# Manual installation (if needed)
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
 sudo ./aws/install
-
-# Verify installation
-aws --version
 ```
+
+**Note:** The script's auto-installation requires `sudo` privileges and `unzip` package.
 
 ### Manual Execution
 
